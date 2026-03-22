@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.12.30)  22 MAR 2026 14:54
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.12.30)  22 MAR 2026 15:20
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1049,7 +1049,7 @@ File: tikzlibraryplotmarks.code.tex 2023-01-15 v3.1.10 (3.1.10)
 aryplotmarks.code.tex
 File: pgflibraryplotmarks.code.tex 2023-01-15 v3.1.10 (3.1.10)
 )))
-LaTeX Font Info:    Trying to load font information for T1+lmss on input line 5
+LaTeX Font Info:    Trying to load font information for T1+lmss on input line 7
 9.
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmss.fd
@@ -1063,24 +1063,24 @@ File: l3backend-pdftex.def 2024-01-04 L3 backend support: PDF output (pdfTeX)
 ) (traffic_simulator_beamer.aux)
 \openout1 = `traffic_simulator_beamer.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 59.
-LaTeX Font Info:    ... okay on input line 59.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 79.
+LaTeX Font Info:    ... okay on input line 79.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -1142,57 +1142,57 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 fg
 File: epstopdf-sys.cfg 2021/03/18 v2.0 Configuration of epstopdf for MiKTeX
 ))
-Package hyperref Info: Link coloring OFF on input line 59.
+Package hyperref Info: Link coloring OFF on input line 79.
  (traffic_simulator_beamer.out) (traffic_simulator_beamer.out)
 \@outlinefile=\write5
 \openout5 = `traffic_simulator_beamer.out'.
 
 LaTeX Font Info:    Overwriting symbol font `operators' in version `normal'
-(Font)                  OT1/lmr/m/n --> OT1/cmss/m/n on input line 59.
+(Font)                  OT1/lmr/m/n --> OT1/cmss/m/n on input line 79.
 LaTeX Font Info:    Overwriting symbol font `operators' in version `bold'
-(Font)                  OT1/lmr/bx/n --> OT1/cmss/b/n on input line 59.
+(Font)                  OT1/lmr/bx/n --> OT1/cmss/b/n on input line 79.
 LaTeX Font Info:    Overwriting symbol font `operators' in version `normal'
-(Font)                  OT1/cmss/m/n --> OT1/lmss/m/n on input line 59.
+(Font)                  OT1/cmss/m/n --> OT1/lmss/m/n on input line 79.
 LaTeX Font Info:    Overwriting symbol font `operators' in version `bold'
-(Font)                  OT1/cmss/b/n --> OT1/lmss/b/n on input line 59.
+(Font)                  OT1/cmss/b/n --> OT1/lmss/b/n on input line 79.
 \symnumbers=\mathgroup6
 \sympureletters=\mathgroup7
 LaTeX Font Info:    Overwriting math alphabet `\mathrm' in version `normal'
-(Font)                  OT1/lmss/m/n --> T1/lmr/m/n on input line 59.
-LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 59.
+(Font)                  OT1/lmss/m/n --> T1/lmr/m/n on input line 79.
+LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `normal'
-(Font)                  OT1/lmr/bx/n --> T1/lmss/b/n on input line 59.
+(Font)                  OT1/lmr/bx/n --> T1/lmss/b/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `bold'
-(Font)                  OT1/lmr/bx/n --> T1/lmss/b/n on input line 59.
-LaTeX Font Info:    Redeclaring math alphabet \mathsf on input line 59.
+(Font)                  OT1/lmr/bx/n --> T1/lmss/b/n on input line 79.
+LaTeX Font Info:    Redeclaring math alphabet \mathsf on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `normal'
-(Font)                  OT1/lmss/m/n --> T1/lmss/m/n on input line 59.
+(Font)                  OT1/lmss/m/n --> T1/lmss/m/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `bold'
-(Font)                  OT1/lmss/bx/n --> T1/lmss/m/n on input line 59.
-LaTeX Font Info:    Redeclaring math alphabet \mathit on input line 59.
+(Font)                  OT1/lmss/bx/n --> T1/lmss/m/n on input line 79.
+LaTeX Font Info:    Redeclaring math alphabet \mathit on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `normal'
-(Font)                  OT1/lmr/m/it --> T1/lmss/m/it on input line 59.
+(Font)                  OT1/lmr/m/it --> T1/lmss/m/it on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `bold'
-(Font)                  OT1/lmr/bx/it --> T1/lmss/m/it on input line 59.
-LaTeX Font Info:    Redeclaring math alphabet \mathtt on input line 59.
+(Font)                  OT1/lmr/bx/it --> T1/lmss/m/it on input line 79.
+LaTeX Font Info:    Redeclaring math alphabet \mathtt on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `normal'
-(Font)                  OT1/lmtt/m/n --> T1/lmtt/m/n on input line 59.
+(Font)                  OT1/lmtt/m/n --> T1/lmtt/m/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
-(Font)                  OT1/lmtt/m/n --> T1/lmtt/m/n on input line 59.
+(Font)                  OT1/lmtt/m/n --> T1/lmtt/m/n on input line 79.
 LaTeX Font Info:    Overwriting symbol font `numbers' in version `bold'
-(Font)                  T1/lmss/m/n --> T1/lmss/b/n on input line 59.
+(Font)                  T1/lmss/m/n --> T1/lmss/b/n on input line 79.
 LaTeX Font Info:    Overwriting symbol font `pureletters' in version `bold'
-(Font)                  T1/lmss/m/it --> T1/lmss/b/it on input line 59.
+(Font)                  T1/lmss/m/it --> T1/lmss/b/it on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathrm' in version `bold'
-(Font)                  OT1/lmss/b/n --> T1/lmr/b/n on input line 59.
+(Font)                  OT1/lmss/b/n --> T1/lmr/b/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `bold'
-(Font)                  T1/lmss/b/n --> T1/lmss/b/n on input line 59.
+(Font)                  T1/lmss/b/n --> T1/lmss/b/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `bold'
-(Font)                  T1/lmss/m/n --> T1/lmss/b/n on input line 59.
+(Font)                  T1/lmss/m/n --> T1/lmss/b/n on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `bold'
-(Font)                  T1/lmss/m/it --> T1/lmss/b/it on input line 59.
+(Font)                  T1/lmss/m/it --> T1/lmss/b/it on input line 79.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
-(Font)                  T1/lmtt/m/n --> T1/lmtt/b/n on input line 59.
+(Font)                  T1/lmtt/m/n --> T1/lmtt/b/n on input line 79.
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-b
 asic-dictionary-English.dict
@@ -1221,181 +1221,91 @@ Dictionary: translator-theorem-dictionary, Language: English
 Package pgfplots notification 'compat/show suggested version=true': document ha
 s been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
 
-(traffic_simulator_beamer.nav)
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 59--59
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 63--63
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[1
+(traffic_simulator_beamer.nav) [1
 
 {C:/Users/Kevin/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/Kevi
-n/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc}]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 67--67
- [][]  \T1/lmss/m/n/6 ([])  
- []
+n/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc}] (traffic_simulat
+or_beamer.toc) [2
 
-(traffic_simulator_beamer.toc)
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
+] [3
 
-[2
+] [4
+
+] [5
 
 ]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 89--89
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[3
-
-]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 105--105
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[4
-
-]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 151--151
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[5
-
-]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 208--208
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-Package pgfplots info on input line 208: Using 'lua backend=false' for axis: x 
+Package pgfplots info on input line 228: Using 'lua backend=false' for axis: x 
 coord trafo unsupported.
 LaTeX Font Info:    Trying to load font information for OT1+lmss on input line 
-208.
+228.
+
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/lm\ot1lmss.fd
 File: ot1lmss.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OML+lmm on input line 2
-08.
+28.
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/lm\omllmm.fd
 File: omllmm.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMS+lmsy on input line 
-208.
+228.
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/lm\omslmsy.fd
 File: omslmsy.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMX+lmex on input line 
-208.
+228.
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/lm\omxlmex.fd
 File: omxlmex.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10.95> on input line 208.
+(Font)              <10.95> on input line 228.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <8> on input line 208.
+(Font)              <8> on input line 228.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <6> on input line 208.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 208
+(Font)              <6> on input line 228.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 228
 .
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 208
+LaTeX Font Info:    Trying to load font information for U+msb on input line 228
 .
 
 (C:\Users\Kevin\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <10.95> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 208.
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 228.
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <8> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 208.
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 228.
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <6> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 208.
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 228.
 
 [6
 
 {C:/Users/Kevin/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathit.enc}
 ]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 229--229
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10> on input line 229.
+(Font)              <10> on input line 249.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <7> on input line 229.
+(Font)              <7> on input line 249.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <5> on input line 229.
+(Font)              <5> on input line 249.
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <10> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 229.
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 249.
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <7> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 229.
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 249.
 LaTeX Font Info:    Font shape `T1/lmss/m/it' in size <5> not available
-(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 229.
+(Font)              Font shape `T1/lmss/m/sl' tried instead on input line 249.
+ [7
 
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
+] [8
 
-[7
-
-]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 261--261
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[8
-
-]
-Overfull \hbox (37.19275pt too wide) in paragraph at lines 273--273
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-
-Overfull \hbox (37.19275pt too wide) has occurred while \output is active
- [][]  \T1/lmss/m/n/6 ([])  
- []
-
-[9
+] [9
 
 ]
 \tf@nav=\write6
@@ -1417,10 +1327,10 @@ d.
 (rerunfilecheck)             Checksum: 2533940B7144585C770742920E8CCCFA;428.
  ) 
 Here is how much of TeX's memory you used:
- 35823 strings out of 474486
- 864239 string characters out of 5743754
+ 35786 strings out of 474486
+ 863320 string characters out of 5743754
  1948542 words of memory out of 5000000
- 57412 multiletter control sequences out of 15000+600000
+ 57375 multiletter control sequences out of 15000+600000
  632518 words of font info for 88 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  128i,15n,123p,743b,2566s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -1430,9 +1340,9 @@ b><C:/Users/Kevin/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmss12.pf
 b><C:/Users/Kevin/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmss8.pfb
 ><C:/Users/Kevin/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmssbx10.p
 fb>
-Output written on traffic_simulator_beamer.pdf (9 pages, 154164 bytes).
+Output written on traffic_simulator_beamer.pdf (9 pages, 149971 bytes).
 PDF statistics:
- 231 PDF objects out of 1000 (max. 8388607)
+ 219 PDF objects out of 1000 (max. 8388607)
  24 named destinations out of 1000 (max. 500000)
- 359 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 323 words of extra memory for PDF output out of 10000 (max. 10000000)
 

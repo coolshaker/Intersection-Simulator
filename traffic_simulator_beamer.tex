@@ -27,15 +27,35 @@
 
 \setbeamercolor{structure}{fg=ODUNavy}
 \setbeamercolor{frametitle}{fg=white,bg=ODUNavy}
-\setbeamercolor{title}{fg=ODUNavy}
+\setbeamercolor{title}{fg=white,bg=ODUNavy}
 \setbeamercolor{block title}{fg=white,bg=ODUNavy}
 \setbeamercolor{block body}{fg=black,bg=ODULight}
 \setbeamercolor{item projected}{fg=white,bg=ODUTeal}
 
-\title{Traffic Simulator Project}
-\subtitle{Beamer Presentation for the Intersection Simulator}
+\setbeamertemplate{title page}{
+  \vfill
+  \begin{center}
+    \begin{beamercolorbox}[wd=\textwidth,ht=3.0cm,dp=0pt,center]{title}
+      \vbox to 3.0cm{
+        \vfil
+        \usebeamerfont{title}\inserttitle\par
+        \vfil
+      }
+    \end{beamercolorbox}
+
+    \vspace{1.1em}
+    {\usebeamerfont{author}\insertauthor\par}
+    \vspace{0.35em}
+    {\usebeamerfont{institute}\insertinstitute\par}
+    \vspace{0.35em}
+    {\usebeamerfont{date}\insertdate\par}
+  \end{center}
+  \vfill
+}
+
+\title{Signalized Intersection Simulator Project}
 \author{Dr. Kun Xie}
-\institute{Old Dominion University \\ Transportation Informatics Lab}
+\institute{Old Dominion University}
 \date{\today}
 
 \newcommand{\metricbox}[3]{
