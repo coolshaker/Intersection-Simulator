@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Dr. Kun Xie <kxie@odu.edu>">
+  <title>Intersection Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">CEE 370 Transportation Fundamentals</p>
+        <h1>Signalized Intersection Simulator</h1>
+        <p class="hero-copy">
+          Explore signal timing, stochastic arrivals, queue formation, and delay at a
+          signalized intersection with one lane on each approach.
+        </p>
+      </div>
+      <div class="hero-badge">
+        <span id="sim-status">Paused</span>
+        <strong id="clock-display">00:00</strong>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls-panel">
+        <div class="panel-heading">
+          <h2>Controls</h2>
+          <p>Tune the inputs and watch the approach respond in real time.</p>
+        </div>
+
+        <div class="control-grid">
+          <label class="field">
+            <span>Phase 1: East-West Green (s)</span>
+            <input id="green-duration" type="number" min="5" max="120" step="1" value="18">
+          </label>
+          <label class="field">
+            <span>Yellow / Clearance (s)</span>
+            <input id="yellow-duration" type="number" min="2" max="20" step="1" value="4">
+          </label>
+          <label class="field">
+            <span>Phase 2: North-South Green (s)</span>
+            <input id="red-duration" type="number" min="5" max="120" step="1" value="20">
+          </label>
+          <label class="field">
+            <span>Eastbound Arrival (veh/hr)</span>
+            <input id="arrival-rate-west" type="number" min="0" max="1800" step="10" value="600">
+          </label>
+          <label class="field">
+            <span>Westbound Arrival (veh/hr)</span>
+            <input id="arrival-rate-east" type="number" min="0" max="1800" step="10" value="600">
+          </label>
+          <label class="field">
+            <span>Southbound Arrival (veh/hr)</span>
+            <input id="arrival-rate-north" type="number" min="0" max="1800" step="10" value="600">
+          </label>
+          <label class="field">
+            <span>Northbound Arrival (veh/hr)</span>
+            <input id="arrival-rate-south" type="number" min="0" max="1800" step="10" value="600">
+          </label>
+          <label class="field">
+            <span>Free-Flow Speed (mph)</span>
+            <input id="desired-speed" type="number" min="10" max="45" step="1" value="28">
+          </label>
+          <label class="field">
+            <span>Large Vehicle Ratio (%)</span>
+            <input id="large-vehicle-ratio" type="number" min="0" max="50" step="1" value="10">
+          </label>
+          <label class="field">
+            <span>Simulation Speed</span>
+            <input id="sim-speed" type="range" min="0.5" max="10" step="0.5" value="1">
+            <output id="sim-speed-label">1.0x</output>
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="start-button" class="primary">Start</button>
+          <button id="pause-button">Pause</button>
+          <button id="reset-button">Reset</button>
+        </div>
+
+        <div class="notes">
+          <h3>What this includes</h3>
+          <ul>
+            <li>One inbound lane per approach.</li>
+            <li>Two-phase signal control with east-west service followed by north-south service.</li>
+            <li>Poisson arrivals on all four approaches.</li>
+            <li>Random left, through, and right movements from each approach.</li>
+            <li>Live arrivals, departures, queue, and delay statistics.</li>
+            <li>A polished, classroom-friendly interface.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel visualization-panel">
+        <div class="panel-heading">
+          <h2>Intersection View</h2>
+          <p>Each approach uses a single lane. East-west and north-south traffic alternate in a simple two-phase signal cycle.</p>
+        </div>
+        <canvas id="sim-canvas" width="1000" height="560" aria-label="Intersection simulation display"></canvas>
+        <div class="legend">
+          <span><i class="dot green"></i> Active Signal</span>
+          <span><i class="dot yellow"></i> Yellow</span>
+          <span><i class="dot red"></i> Stopped Phase</span>
+          <span><i class="swatch"></i> Vehicles</span>
+        </div>
+      </section>
+
+      <section class="panel stats-panel">
+        <div class="panel-heading">
+          <h2>Statistics</h2>
+          <p>Measures update continuously as the simulation runs.</p>
+        </div>
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span>Arrivals</span>
+            <strong id="arrivals-stat">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Departures</span>
+            <strong id="departures-stat">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Current Queue</span>
+            <strong id="queue-stat">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Max Queue</span>
+            <strong id="max-queue-stat">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Avg Delay</span>
+            <strong id="delay-stat">0.0 s</strong>
+          </article>
+          <article class="stat-card">
+            <span>Signal State</span>
+            <strong id="signal-stat">Phase 1</strong>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Author: Dr. Kun Xie (<a href="mailto:kxie@odu.edu">kxie@odu.edu</a>)</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
