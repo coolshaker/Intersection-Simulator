@@ -23,9 +23,9 @@ const statEls = {
   arrivals: document.getElementById("arrivals-stat"),
   departures: document.getElementById("departures-stat"),
   queue: document.getElementById("queue-stat"),
+  avgQueue: document.getElementById("avg-queue-stat"),
   maxQueue: document.getElementById("max-queue-stat"),
   delay: document.getElementById("delay-stat"),
-  signal: document.getElementById("signal-stat"),
   status: document.getElementById("sim-status"),
   clock: document.getElementById("clock-display"),
 };
@@ -38,6 +38,9 @@ const approachLength = 420;
 const exitLength = 220;
 const minVehicleGapPx = 12.0 * pxPerMeter + 8;  // Based on max vehicle length (12m) + buffer
 const opposingThroughYieldDistancePx = 190;
+const queueDetectionDistancePx = 14 * pxPerMeter;
+const queueCreepSpeedMps = 2.2;
+const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
 const defaultMovementRatios = {
   left: 0.23,
@@ -186,7 +189,9 @@ const sim = {
   stats: {
     arrivals: 0,
     departures: 0,
+    completedTrips: 0,
     currentQueue: 0,
+    queueTimeIntegral: 0,
     maxQueue: 0,
     totalDelay: 0,
   },
@@ -253,7 +258,9 @@ function resetSimulation() {
   sim.stats = {
     arrivals: 0,
     departures: 0,
+    completedTrips: 0,
     currentQueue: 0,
+    queueTimeIntegral: 0,
     maxQueue: 0,
     totalDelay: 0,
   };
@@ -319,6 +326,8 @@ function createVehicle(approachKey) {
     state: "approach",
     path: null,
     pathLength: 0,
+    hasEnteredView: false,
+    hasExitedView: false,
     position: getVehiclePosition(approach, coord),
     angle: approach.pathDirection,
     color: isLargeVehicle
@@ -348,10 +357,78 @@ function maybeSpawnVehicles() {
       }
 
       sim.vehicles.push(createVehicle(approach.key));
-      sim.stats.arrivals += 1;
       scheduleNextArrival(approach.key);
     }
   }
+}
+
+function getVehicleCanvasHalfExtents(vehicle) {
+  const halfLengthPx = (vehicle.length * pxPerMeter) / 2;
+  const halfWidthPx = (vehicle.width * pxPerMeter) / 2;
+
+  return {
+    x: Math.abs(Math.cos(vehicle.angle)) * halfLengthPx + Math.abs(Math.sin(vehicle.angle)) * halfWidthPx,
+    y: Math.abs(Math.sin(vehicle.angle)) * halfLengthPx + Math.abs(Math.cos(vehicle.angle)) * halfWidthPx,
+  };
+}
+
+function isVehicleVisibleInView(vehicle) {
+  const halfExtents = getVehicleCanvasHalfExtents(vehicle);
+
+  return (
+    vehicle.position.x + halfExtents.x >= 0 &&
+    vehicle.position.x - halfExtents.x <= canvas.width &&
+    vehicle.position.y + halfExtents.y >= 0 &&
+    vehicle.position.y - halfExtents.y <= canvas.height
+  );
+}
+
+function updateVehicleViewCounts(vehicle) {
+  const isVisible = isVehicleVisibleInView(vehicle);
+
+  if (isVisible && !vehicle.hasEnteredView) {
+    vehicle.hasEnteredView = true;
+    sim.stats.arrivals += 1;
+  }
+
+  if (!isVisible && vehicle.hasEnteredView && !vehicle.hasExitedView) {
+    vehicle.hasExitedView = true;
+    sim.stats.departures += 1;
+  }
+}
+
+function getApproachQueueCount(approachKey) {
+  const approach = approaches[approachKey];
+  const queue = getApproachQueue(approachKey);
+  const queuedVehicleIds = new Set();
+  let count = 0;
+
+  for (let i = 0; i < queue.length; i += 1) {
+    const vehicle = queue[i];
+    const leader = i === 0 ? null : queue[i - 1];
+    const gapToStopPx = Math.abs(approach.stopCoord - vehicle.coord) - (vehicle.length * pxPerMeter) / 2;
+    const gapToLeaderPx = leader
+      ? Math.abs(leader.coord - vehicle.coord) - leader.length * pxPerMeter
+      : Number.POSITIVE_INFINITY;
+    const isStoppedAtControl =
+      gapToStopPx <= queueDetectionDistancePx &&
+      vehicle.v <= queueCreepSpeedMps;
+    const isTrappedBehindQueue =
+      Boolean(leader) &&
+      queuedVehicleIds.has(leader.id) &&
+      gapToLeaderPx <= queueFollowerGapPx;
+
+    if (isStoppedAtControl || isTrappedBehindQueue) {
+      queuedVehicleIds.add(vehicle.id);
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function getTotalRealTimeQueueCount() {
+  return approachList.reduce((total, approach) => total + getApproachQueueCount(approach.key), 0);
 }
 
 function currentSignalDuration() {
@@ -680,6 +757,7 @@ function updateApproachVehicles(dt) {
 
       vehicle.position = getVehiclePosition(approach, vehicle.coord);
       vehicle.angle = approach.pathDirection;
+      updateVehicleViewCounts(vehicle);
 
       const canEnter =
         isVehiclePermitted(vehicle) &&
@@ -738,6 +816,7 @@ function updateIntersectionVehicles(dt) {
     const sample = samplePath(vehicle.path, vehicle.progress);
     vehicle.position = sample.position;
     vehicle.angle = sample.angle;
+    updateVehicleViewCounts(vehicle);
 
     if (vehicle.progress < vehicle.pathLength) {
       remaining.push(vehicle);
@@ -747,7 +826,7 @@ function updateIntersectionVehicles(dt) {
     const freeFlowTravelTime = 150 / vehicle.desiredSpeed;
     const elapsedTravelTime = sim.time - vehicle.enteredAt;
     const delay = Math.max(0, elapsedTravelTime - freeFlowTravelTime);
-    sim.stats.departures += 1;
+    sim.stats.completedTrips += 1;
     sim.stats.totalDelay += delay;
   }
 
@@ -758,10 +837,9 @@ function updateVehicles(dt) {
   updateApproachVehicles(dt);
   updateIntersectionVehicles(dt);
 
-  const queueCount = sim.vehicles.filter(
-    (vehicle) => vehicle.state === "approach" && vehicle.v < 0.8,
-  ).length;
+  const queueCount = getTotalRealTimeQueueCount();
   sim.stats.currentQueue = queueCount;
+  sim.stats.queueTimeIntegral += queueCount * dt;
   sim.stats.maxQueue = Math.max(sim.stats.maxQueue, queueCount);
 }
 
@@ -784,9 +862,9 @@ function updateOutputs() {
   statEls.arrivals.textContent = String(sim.stats.arrivals);
   statEls.departures.textContent = String(sim.stats.departures);
   statEls.queue.textContent = String(sim.stats.currentQueue);
+  statEls.avgQueue.textContent = (sim.time > 0 ? sim.stats.queueTimeIntegral / sim.time : 0).toFixed(1);
   statEls.maxQueue.textContent = String(sim.stats.maxQueue);
-  statEls.delay.textContent = `${(sim.stats.departures ? sim.stats.totalDelay / sim.stats.departures : 0).toFixed(1)} s`;
-  statEls.signal.textContent = formatSignalState();
+  statEls.delay.textContent = `${(sim.stats.completedTrips ? sim.stats.totalDelay / sim.stats.completedTrips : 0).toFixed(1)} s`;
   statEls.status.textContent = sim.running ? "Running" : "Paused";
   statEls.clock.textContent = formatClock(sim.time);
 }
@@ -952,10 +1030,29 @@ function drawVehicle(vehicle) {
 function drawApproachLabels() {
   ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.font = '700 14px "Space Grotesk", sans-serif';
-  ctx.fillText("Eastbound", 54, roadCenterY + 102);
-  ctx.fillText("Westbound", canvas.width - 146, roadCenterY - 86);
-  ctx.fillText("Southbound", roadCenterX - 44, 24);
-  ctx.fillText("Northbound", roadCenterX - 44, canvas.height - 14);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const horizontalLabelOffsetY = roadHalfWidth + 34;
+  const verticalLabelOffsetX = roadHalfWidth + 34;
+
+  ctx.fillText("Eastbound", roadCenterX - 150, roadCenterY + horizontalLabelOffsetY);
+
+  ctx.fillText("Westbound", roadCenterX + 150, roadCenterY - horizontalLabelOffsetY);
+
+  ctx.save();
+  ctx.translate(roadCenterX - verticalLabelOffsetX, roadCenterY - 165);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText("Southbound", 0, 0);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(roadCenterX + verticalLabelOffsetX, roadCenterY + 165);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText("Northbound", 0, 0);
+  ctx.restore();
+
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
 }
 
 function roundRect(context, x, y, width, height, radius) {
@@ -1011,16 +1108,30 @@ function step(timestamp) {
   requestAnimationFrame(step);
 }
 
-controls.start.addEventListener("click", () => {
+function startSimulation() {
   sim.config = readConfig();
   sim.running = true;
   updateOutputs();
-});
+}
 
-controls.pause.addEventListener("click", () => {
+function pauseSimulation() {
   sim.running = false;
   updateOutputs();
-});
+}
+
+function toggleSimulation() {
+  if (sim.running) {
+    pauseSimulation();
+    return;
+  }
+  startSimulation();
+}
+
+controls.start.addEventListener("click", startSimulation);
+
+controls.pause.addEventListener("click", pauseSimulation);
+
+canvas.addEventListener("click", toggleSimulation);
 
 controls.reset.addEventListener("click", resetSimulation);
 

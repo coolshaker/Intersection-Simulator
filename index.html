@@ -96,7 +96,7 @@
           <h2>Intersection View</h2>
           <p>Each approach uses a single lane. East-west and north-south traffic alternate in a simple two-phase signal cycle.</p>
         </div>
-        <canvas id="sim-canvas" width="1000" height="560" aria-label="Intersection simulation display"></canvas>
+        <canvas id="sim-canvas" width="1000" height="560" aria-label="Intersection simulation display" title="Click to start or pause the simulation"></canvas>
         <div class="legend">
           <span><i class="dot green"></i> Active Signal</span>
           <span><i class="dot yellow"></i> Yellow</span>
@@ -120,8 +120,12 @@
             <strong id="departures-stat">0</strong>
           </article>
           <article class="stat-card">
-            <span>Current Queue</span>
+            <span>Queue</span>
             <strong id="queue-stat">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Average Queue</span>
+            <strong id="avg-queue-stat">0.0</strong>
           </article>
           <article class="stat-card">
             <span>Max Queue</span>
@@ -130,10 +134,6 @@
           <article class="stat-card">
             <span>Avg Delay</span>
             <strong id="delay-stat">0.0 s</strong>
-          </article>
-          <article class="stat-card">
-            <span>Signal State</span>
-            <strong id="signal-stat">Phase 1</strong>
           </article>
         </div>
       </section>

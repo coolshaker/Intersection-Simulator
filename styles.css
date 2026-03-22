@@ -242,6 +242,7 @@ button.primary {
   display: block;
   border-radius: 22px;
   background: linear-gradient(180deg, #a8d3a2 0%, #95c28f 44%, #7da17a 100%);
+  cursor: pointer;
 }
 
 .legend {
