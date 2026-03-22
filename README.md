@@ -16,6 +16,7 @@ This project visualizes traffic operations at a four-leg intersection with:
 - Adjustable east-west green, yellow clearance, and north-south green times
 - Separate arrival-rate inputs for each approach
 - Adjustable free-flow speed
+- Adjustable left-turn percentage
 - Adjustable large-vehicle percentage
 - Adjustable simulation speed
 - Real-time signal status, clock, and performance metrics
@@ -43,6 +44,7 @@ No build step is required.
 - `Phase 2: North-South Green (s)` - green time for north-south traffic
 - `Arrival rates` - separate demand levels for each approach in vehicles per hour
 - `Free-Flow Speed (mph)` - target speed used by simulated vehicles
+- `Left Turn Ratio (%)` - share of vehicles that take the left-turn movement
 - `Large Vehicle Ratio (%)` - share of larger vehicles in the traffic stream
 - `Simulation Speed` - playback speed multiplier for the simulation
 

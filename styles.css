@@ -118,6 +118,35 @@ h1 {
 
 .controls-panel {
   grid-row: span 2;
+  padding: 16px;
+}
+
+.controls-panel .panel-heading {
+  margin-bottom: 12px;
+}
+
+.controls-panel .control-grid {
+  gap: 8px;
+}
+
+.controls-panel .field {
+  gap: 5px;
+}
+
+.controls-panel .field span {
+  font-size: 0.92rem;
+}
+
+.controls-panel .field input {
+  padding: 9px 11px;
+}
+
+.controls-panel .button-row {
+  margin: 14px 0 0;
+}
+
+.stats-panel {
+  margin-top: 12px;
 }
 
 .panel {
@@ -288,6 +317,10 @@ button.primary {
 
   .controls-panel {
     grid-row: auto;
+  }
+
+  .stats-panel {
+    margin-top: 0;
   }
 
   .stats-grid {

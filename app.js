@@ -10,6 +10,7 @@ const controls = {
   arrivalRateNorth: document.getElementById("arrival-rate-north"),
   arrivalRateSouth: document.getElementById("arrival-rate-south"),
   desiredSpeed: document.getElementById("desired-speed"),
+  leftTurnRatio: document.getElementById("left-turn-ratio"),
   largeVehicleRatio: document.getElementById("large-vehicle-ratio"),
   simSpeed: document.getElementById("sim-speed"),
   simSpeedLabel: document.getElementById("sim-speed-label"),
@@ -37,6 +38,12 @@ const approachLength = 420;
 const exitLength = 220;
 const minVehicleGapPx = 12.0 * pxPerMeter + 8;  // Based on max vehicle length (12m) + buffer
 const opposingThroughYieldDistancePx = 190;
+const leftTurnYieldBufferPx = 18;
+const defaultMovementRatios = {
+  left: 0.23,
+  through: 0.53,
+  right: 0.24,
+};
 
 function point(x, y) {
   return { x, y };
@@ -202,7 +209,8 @@ function readConfig() {
       south: clampNumber(controls.arrivalRateSouth.value, 0, 1800, 600),
     },
     desiredSpeedMps: clampNumber(controls.desiredSpeed.value, 10, 45, 28) * 0.44704,
-    largeVehicleRatio: clampNumber(controls.largeVehicleRatio.value, 0, 50, 10) / 100,
+    leftTurnRatio: clampNumber(controls.leftTurnRatio.value, 0, 100, 23) / 100,
+    largeVehicleRatio: clampNumber(controls.largeVehicleRatio.value, 0, 100, 10) / 100,
     simSpeed: clampNumber(controls.simSpeed.value, 0.5, 10, 1),
   };
 }
@@ -261,11 +269,17 @@ function resetSimulation() {
 }
 
 function pickMovement() {
+  const leftTurnRatio = sim.config.leftTurnRatio;
+  const remainingRatio = Math.max(0, 1 - leftTurnRatio);
+  const nonLeftDefaultTotal = defaultMovementRatios.through + defaultMovementRatios.right;
+  const throughRatio = nonLeftDefaultTotal > 0
+    ? remainingRatio * (defaultMovementRatios.through / nonLeftDefaultTotal)
+    : remainingRatio;
   const roll = Math.random();
-  if (roll < 0.23) {
+  if (roll < leftTurnRatio) {
     return "left";
   }
-  if (roll < 0.76) {
+  if (roll < leftTurnRatio + throughRatio) {
     return "through";
   }
   return "right";
@@ -398,27 +412,51 @@ function hasOpposingThroughConflict(vehicle) {
     return false;
   }
 
-  const opposingKey = getOpposingApproachKey(vehicle.approach);
-  const opposingApproach = approaches[opposingKey];
-  const throughRouteKey = `${opposingKey}-through`;
-  const opposingQueue = getApproachQueue(opposingKey);
-  const opposingLead = opposingQueue[0] || null;
-
-  const opposingLeadConflict =
-    opposingLead &&
-    opposingLead.movement === "through" &&
-    isVehiclePermitted(opposingLead) &&
-    Math.abs(opposingApproach.stopCoord - opposingLead.coord) < opposingThroughYieldDistancePx;
-
-  if (opposingLeadConflict) {
-    return true;
+  const conflictProfile = getLeftTurnConflictProfile(vehicle.approach);
+  if (!conflictProfile) {
+    return false;
   }
 
-  return sim.vehicles.some((other) => (
-    other.routeKey === throughRouteKey &&
-    other.state === "intersection" &&
-    other.progress < other.pathLength * 0.72
-  ));
+  const opposingKey = getOpposingApproachKey(vehicle.approach);
+  const opposingLead = getApproachQueue(opposingKey)[0] || null;
+
+  return sim.vehicles.some((other) => {
+    if (other.id === vehicle.id || other.approach !== opposingKey || other.movement !== "through") {
+      return false;
+    }
+
+    if (other.state === "approach") {
+      if (!opposingLead || other.id !== opposingLead.id || !isVehiclePermitted(other)) {
+        return false;
+      }
+    } else if (other.state !== "intersection") {
+      return false;
+    }
+
+    const remainingDistance = getThroughDistanceToConflict(other, conflictProfile.throughConflictCoord);
+    const clearanceDistance = (other.length * pxPerMeter) / 2 + 8;
+    return remainingDistance >= -clearanceDistance && remainingDistance <= opposingThroughYieldDistancePx;
+  });
+}
+
+function moveVehicleIntoIntersection(vehicle) {
+  vehicle.state = "intersection";
+  vehicle.path = buildPath(vehicle);
+  vehicle.pathLength = pathLength(vehicle.path);
+  vehicle.progress = 0;
+
+  if (vehicle.movement !== "left") {
+    return;
+  }
+
+  const conflictProfile = getLeftTurnConflictProfile(vehicle.approach);
+  if (!conflictProfile) {
+    return;
+  }
+
+  const halfVehicleLengthPx = (vehicle.length * pxPerMeter) / 2;
+  vehicle.yieldProgress = Math.max(0, conflictProfile.yieldProgress - halfVehicleLengthPx);
+  vehicle.clearProgress = Math.min(vehicle.pathLength, conflictProfile.clearProgress + halfVehicleLengthPx);
 }
 
 function buildPath(vehicle) {
@@ -483,6 +521,85 @@ function samplePath(points, distance) {
     position: last,
     angle: Math.atan2(last.y - previous.y, last.x - previous.x),
   };
+}
+
+function findPathDistanceToLine(points, axis, value) {
+  let cumulativeDistance = 0;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const start = points[i - 1];
+    const end = points[i];
+    const startDelta = start[axis] - value;
+    const endDelta = end[axis] - value;
+    const segmentLength = distanceBetween(start, end);
+
+    if (startDelta === 0) {
+      return { distance: cumulativeDistance, point: start };
+    }
+
+    if (endDelta === 0) {
+      return { distance: cumulativeDistance + segmentLength, point: end };
+    }
+
+    if ((startDelta < 0 && endDelta > 0) || (startDelta > 0 && endDelta < 0)) {
+      const ratio = (value - start[axis]) / (end[axis] - start[axis]);
+      return {
+        distance: cumulativeDistance + segmentLength * ratio,
+        point: point(
+          start.x + (end.x - start.x) * ratio,
+          start.y + (end.y - start.y) * ratio,
+        ),
+      };
+    }
+
+    cumulativeDistance += segmentLength;
+  }
+
+  return null;
+}
+
+const leftTurnConflictProfiles = {};
+
+function getLeftTurnConflictProfile(approachKey) {
+  if (Object.prototype.hasOwnProperty.call(leftTurnConflictProfiles, approachKey)) {
+    return leftTurnConflictProfiles[approachKey];
+  }
+
+  const opposingKey = getOpposingApproachKey(approachKey);
+  const opposingApproach = approaches[opposingKey];
+  const conflictAxis = opposingApproach.axis === "x" ? "y" : "x";
+  const leftTurnPath = buildPath({ approach: approachKey, movement: "left" });
+  const conflictLocation = findPathDistanceToLine(leftTurnPath, conflictAxis, opposingApproach.laneCenter);
+
+  if (!conflictLocation) {
+    leftTurnConflictProfiles[approachKey] = null;
+    return null;
+  }
+
+  const nominalPathLength = pathLength(leftTurnPath);
+  leftTurnConflictProfiles[approachKey] = {
+    throughConflictCoord: opposingApproach.axis === "x"
+      ? conflictLocation.point.x
+      : conflictLocation.point.y,
+    yieldProgress: Math.max(0, conflictLocation.distance - leftTurnYieldBufferPx),
+    clearProgress: Math.min(nominalPathLength, conflictLocation.distance + leftTurnYieldBufferPx),
+  };
+
+  return leftTurnConflictProfiles[approachKey];
+}
+
+function getVehicleAxisCoord(vehicle) {
+  if (vehicle.state === "approach") {
+    return vehicle.coord;
+  }
+
+  const approach = approaches[vehicle.approach];
+  return approach.axis === "x" ? vehicle.position.x : vehicle.position.y;
+}
+
+function getThroughDistanceToConflict(vehicle, conflictCoord) {
+  const approach = approaches[vehicle.approach];
+  return (conflictCoord - getVehicleAxisCoord(vehicle)) * approach.travelSign;
 }
 
 function idmAcceleration(vehicle, leadObject) {
@@ -573,10 +690,7 @@ function updateApproachVehicles(dt) {
         );
 
       if (canEnter) {
-        vehicle.state = "intersection";
-        vehicle.path = buildPath(vehicle);
-        vehicle.pathLength = pathLength(vehicle.path);
-        vehicle.progress = 0;
+        moveVehicleIntoIntersection(vehicle);
       }
     }
   }
@@ -588,8 +702,20 @@ function updateIntersectionVehicles(dt) {
   const routeGroups = new Map();
 
   for (const vehicle of active) {
-    vehicle.v = Math.min(vehicle.desiredSpeed, Math.max(vehicle.desiredSpeed * 0.65, vehicle.v + 1.4 * dt));
-    vehicle.progress += vehicle.v * pxPerMeter * dt;
+    const shouldYieldInIntersection =
+      vehicle.movement === "left" &&
+      Number.isFinite(vehicle.yieldProgress) &&
+      vehicle.progress <= vehicle.yieldProgress + 0.5 &&
+      hasOpposingThroughConflict(vehicle);
+
+    if (shouldYieldInIntersection) {
+      vehicle.v = Math.max(0, vehicle.v - 3.6 * dt);
+    } else {
+      vehicle.v = Math.min(vehicle.desiredSpeed, Math.max(vehicle.desiredSpeed * 0.65, vehicle.v + 1.4 * dt));
+    }
+
+    const maxProgress = shouldYieldInIntersection ? vehicle.yieldProgress : Number.POSITIVE_INFINITY;
+    vehicle.progress = Math.min(vehicle.progress + vehicle.v * pxPerMeter * dt, maxProgress);
 
     if (!routeGroups.has(vehicle.routeKey)) {
       routeGroups.set(vehicle.routeKey, []);
@@ -907,6 +1033,7 @@ controls.reset.addEventListener("click", resetSimulation);
   controls.arrivalRateNorth,
   controls.arrivalRateSouth,
   controls.desiredSpeed,
+  controls.leftTurnRatio,
   controls.largeVehicleRatio,
   controls.simSpeed,
 ].forEach((control) => {
