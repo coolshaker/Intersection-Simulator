@@ -44,12 +44,31 @@ const queueDetectionDistancePx = 14 * pxPerMeter;
 const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
-const stopLineOffsetPx = 34;
+const stopLineOffsetPx = 44;
+const stopLineThicknessPx = 6;
+const stopLineLengthPx = 44;
 const centerlineSetbackPx = 106;
 const crosswalkHalfSpanPx = 54;
 const crosswalkOffsetPx = 28;
-const crosswalkWidthPx = 24;
+const crosswalkWidthPx = 18;
+const crosswalkStripeThicknessPx = 8;
 const pedBodyRadiusPx = 4.5;
+const pedestrianPathConflictThresholdPx = 16;
+const pedestrianYieldBufferPx = 12;
+const pedestrianStartDelayMinS = 0.25;
+const pedestrianStartDelayMaxS = 1.1;
+const pedestrianAccelerationMps2 = 0.9;
+const pedestrianEndSlowdownDistancePx = 18;
+const pedestrianComfortGapPx = 26;
+const pedestrianLeadVehicleSpeedThresholdMps = 1.8;
+const pedestrianLateralOffsetPx = 4.5;
+const pedestrianSwayAmplitudePx = 1.3;
+const pedestrianVehicleClearancePx = 2.5;
+const pedestrianMaxDodgeOffsetPx = 8;
+const pedestrianStoppedVehicleDodgeOffsetPx = 16;
+const pedestrianDodgeRatePxPerSecond = 28;
+const pedestrianStoppedVehicleSpeedThresholdMps = 0.15;
+const pedestrianLargeVehicleBypassMarginPx = 6;
 const defaultMovementRatios = {
   left: 0.23,
   through: 0.53,
@@ -62,6 +81,82 @@ function point(x, y) {
 
 function distanceBetween(a, b) {
   return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function distancePointToSegment(target, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    return {
+      distance: distanceBetween(target, start),
+      point: start,
+      ratio: 0,
+    };
+  }
+
+  const projection = ((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared;
+  const ratio = clamp(projection, 0, 1);
+  const pointOnSegment = point(start.x + dx * ratio, start.y + dy * ratio);
+
+  return {
+    distance: distanceBetween(target, pointOnSegment),
+    point: pointOnSegment,
+    ratio,
+  };
+}
+
+function findClosestPathPoint(points, target) {
+  if (!points || points.length < 2) {
+    return null;
+  }
+
+  let cumulativeDistance = 0;
+  let best = null;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const start = points[i - 1];
+    const end = points[i];
+    const segmentLength = distanceBetween(start, end);
+    const closest = distancePointToSegment(target, start, end);
+    const progress = cumulativeDistance + segmentLength * closest.ratio;
+
+    if (!best || closest.distance < best.distance) {
+      best = {
+        distance: closest.distance,
+        point: closest.point,
+        progress,
+      };
+    }
+
+    cumulativeDistance += segmentLength;
+  }
+
+  return best;
+}
+
+function normalizeVector(dx, dy) {
+  const magnitude = Math.hypot(dx, dy);
+  if (magnitude < 1e-6) {
+    return { x: 0, y: 0 };
+  }
+  return { x: dx / magnitude, y: dy / magnitude };
+}
+
+function moveToward(current, target, maxDelta) {
+  if (Math.abs(target - current) <= maxDelta) {
+    return target;
+  }
+  return current + Math.sign(target - current) * maxDelta;
+}
+
+function isVehicleStoppedForPedestrian(vehicle) {
+  return Math.abs(vehicle.v) <= pedestrianStoppedVehicleSpeedThresholdMps;
 }
 
 const approaches = {
@@ -538,19 +633,62 @@ function hasActiveCrosswalkPedestrian(approachKey) {
   return sim.pedestrians.some((pedestrian) => pedestrian.approach === approachKey);
 }
 
+function isPedestrianEntryComfortable(approachKey) {
+  const queue = getApproachQueue(approachKey);
+  const leadVehicle = queue[0];
+  if (!leadVehicle) {
+    return true;
+  }
+
+  const approach = approaches[approachKey];
+  const gapToStopPx = Math.abs(approach.stopCoord - leadVehicle.coord) - (leadVehicle.length * pxPerMeter) / 2;
+  if (gapToStopPx > pedestrianComfortGapPx) {
+    return true;
+  }
+
+  return !isVehiclePermitted(leadVehicle) && leadVehicle.v <= pedestrianLeadVehicleSpeedThresholdMps;
+}
+
 function createPedestrian(approachKey) {
   const crosswalk = crosswalks[approachKey];
-  const lengthPx = distanceBetween(crosswalk.start, crosswalk.end);
-  const speedMps = 1.0 + Math.random() * 0.7;
+  const direction = normalizeVector(crosswalk.end.x - crosswalk.start.x, crosswalk.end.y - crosswalk.start.y);
+  const normal = point(-direction.y, direction.x);
+  const baseOffsetPx = (Math.random() * 2 - 1) * pedestrianLateralOffsetPx;
+  const start = point(
+    crosswalk.start.x + normal.x * baseOffsetPx,
+    crosswalk.start.y + normal.y * baseOffsetPx
+  );
+  const end = point(
+    crosswalk.end.x + normal.x * baseOffsetPx,
+    crosswalk.end.y + normal.y * baseOffsetPx
+  );
+  const lengthPx = distanceBetween(start, end);
+  const desiredSpeedMps = 0.95 + Math.random() * 0.65;
+  const bodyRadiusPx = pedBodyRadiusPx * (0.9 + Math.random() * 0.22);
+  const stepFrequencyHz = 1.45 + desiredSpeedMps * 0.55 + Math.random() * 0.35;
+  const swayAmplitudePx = pedestrianSwayAmplitudePx * (0.7 + Math.random() * 0.7);
+  const startDelayS = pedestrianStartDelayMinS + Math.random() * (pedestrianStartDelayMaxS - pedestrianStartDelayMinS);
   return {
     id: sim.nextPedestrianId++,
     approach: approachKey,
     progress: 0,
-    speedMps,
-    start: crosswalk.start,
-    end: crosswalk.end,
+    speedMps: 0,
+    desiredSpeedMps,
+    bodyRadiusPx,
+    stepFrequencyHz,
+    stepPhase: Math.random() * Math.PI * 2,
+    swayAmplitudePx,
+    lateralOffsetPx: baseOffsetPx,
+    startDelayS,
+    start,
+    end,
     lengthPx,
-    position: crosswalk.start,
+    position: start,
+    heading: direction,
+    normal,
+    dodgeOffsetPx: 0,
+    dodgeTargetOffsetPx: 0,
+    blockingVehicleId: null,
   };
 }
 
@@ -563,7 +701,7 @@ function maybeSpawnPedestrians() {
 
     const hasActive = hasActiveCrosswalkPedestrian(approach.key);
     const hasDemand = sim.pendingPedRequests[approach.key] > 0;
-    const canStartCrossing = !isApproachVehicleGreen(approach.key);
+    const canStartCrossing = !isApproachVehicleGreen(approach.key) && isPedestrianEntryComfortable(approach.key);
     if (!hasActive && hasDemand && canStartCrossing) {
       sim.pedestrians.push(createPedestrian(approach.key));
       sim.pendingPedRequests[approach.key] -= 1;
@@ -571,15 +709,174 @@ function maybeSpawnPedestrians() {
   }
 }
 
+function getPedestrianPositionAtProgress(pedestrian, progress, dodgeOffsetPx = pedestrian.dodgeOffsetPx || 0) {
+  const ratio = Math.min(1, Math.max(0, progress / Math.max(1, pedestrian.lengthPx)));
+  return point(
+    pedestrian.start.x + (pedestrian.end.x - pedestrian.start.x) * ratio + pedestrian.normal.x * dodgeOffsetPx,
+    pedestrian.start.y + (pedestrian.end.y - pedestrian.start.y) * ratio + pedestrian.normal.y * dodgeOffsetPx
+  );
+}
+
+function getBlockingVehicleForPedestrian(pedestrian, position) {
+  const bodyRadius = pedestrian.bodyRadiusPx || pedBodyRadiusPx;
+
+  for (const vehicle of sim.vehicles) {
+    const dx = position.x - vehicle.position.x;
+    const dy = position.y - vehicle.position.y;
+    const cos = Math.cos(vehicle.angle);
+    const sin = Math.sin(vehicle.angle);
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    const halfLengthPx = (vehicle.length * pxPerMeter) / 2 + bodyRadius + pedestrianVehicleClearancePx;
+    const halfWidthPx = (vehicle.width * pxPerMeter) / 2 + bodyRadius + pedestrianVehicleClearancePx;
+
+    if (Math.abs(localX) <= halfLengthPx && Math.abs(localY) <= halfWidthPx) {
+      return vehicle;
+    }
+  }
+
+  return null;
+}
+
+function getPedestrianDodgeCandidates(pedestrian, blocker) {
+  const bodyRadius = pedestrian.bodyRadiusPx || pedBodyRadiusPx;
+  const side = ((blocker.position.x - pedestrian.position.x) * pedestrian.normal.x) +
+    ((blocker.position.y - pedestrian.position.y) * pedestrian.normal.y);
+  const preferredSign = side >= 0 ? -1 : 1;
+  const maxDodgeOffset = isVehicleStoppedForPedestrian(blocker)
+    ? pedestrianStoppedVehicleDodgeOffsetPx
+    : pedestrianMaxDodgeOffsetPx;
+  const blockerHalfExtents = getVehicleCanvasHalfExtents(blocker);
+  const blockerNormalExtentPx = Math.abs(pedestrian.normal.x) > Math.abs(pedestrian.normal.y)
+    ? blockerHalfExtents.x
+    : blockerHalfExtents.y;
+  const basePathPosition = getPedestrianPositionAtProgress(pedestrian, pedestrian.progress, 0);
+  const blockerCenterOffsetPx =
+    ((blocker.position.x - basePathPosition.x) * pedestrian.normal.x) +
+    ((blocker.position.y - basePathPosition.y) * pedestrian.normal.y);
+  const requiredBypassOffsetPx =
+    Math.abs(blockerCenterOffsetPx) +
+    blockerNormalExtentPx +
+    bodyRadius +
+    pedestrianVehicleClearancePx +
+    pedestrianLargeVehicleBypassMarginPx;
+  const stoppedVehicleBypassOffsetPx = isVehicleStoppedForPedestrian(blocker)
+    ? Math.max(maxDodgeOffset, requiredBypassOffsetPx)
+    : maxDodgeOffset;
+  const offsets = [
+    0,
+    pedestrian.dodgeOffsetPx || 0,
+    preferredSign * (maxDodgeOffset * 0.5),
+    preferredSign * maxDodgeOffset,
+    -preferredSign * (maxDodgeOffset * 0.5),
+    -preferredSign * maxDodgeOffset,
+    preferredSign * stoppedVehicleBypassOffsetPx,
+    -preferredSign * stoppedVehicleBypassOffsetPx,
+  ];
+
+  return offsets
+    .map((offset) => clamp(offset, -stoppedVehicleBypassOffsetPx, stoppedVehicleBypassOffsetPx))
+    .filter((offset, index, array) => array.findIndex((value) => Math.abs(value - offset) < 0.01) === index);
+}
+
 function updatePedestrians(dt) {
   const remaining = [];
   for (const pedestrian of sim.pedestrians) {
-    pedestrian.progress += pedestrian.speedMps * pxPerMeter * dt;
-    const ratio = Math.min(1, pedestrian.progress / Math.max(1, pedestrian.lengthPx));
-    pedestrian.position = point(
-      pedestrian.start.x + (pedestrian.end.x - pedestrian.start.x) * ratio,
-      pedestrian.start.y + (pedestrian.end.y - pedestrian.start.y) * ratio,
+    if (pedestrian.startDelayS > 0) {
+      pedestrian.startDelayS = Math.max(0, pedestrian.startDelayS - dt);
+    }
+
+    let targetSpeedMps = pedestrian.startDelayS > 0 ? 0 : pedestrian.desiredSpeedMps;
+    const remainingDistancePx = Math.max(0, pedestrian.lengthPx - pedestrian.progress);
+    if (remainingDistancePx < pedestrianEndSlowdownDistancePx) {
+      const slowdownRatio = clamp(remainingDistancePx / pedestrianEndSlowdownDistancePx, 0.35, 1);
+      targetSpeedMps *= slowdownRatio;
+    }
+
+    const speedDeltaLimit = pedestrianAccelerationMps2 * dt;
+    if (pedestrian.speedMps < targetSpeedMps) {
+      pedestrian.speedMps = Math.min(targetSpeedMps, pedestrian.speedMps + speedDeltaLimit);
+    } else {
+      pedestrian.speedMps = Math.max(targetSpeedMps, pedestrian.speedMps - speedDeltaLimit * 1.2);
+    }
+
+    const currentProgress = pedestrian.progress;
+    const currentPosition = getPedestrianPositionAtProgress(pedestrian, currentProgress);
+    const desiredProgress = Math.min(
+      pedestrian.lengthPx,
+      currentProgress + pedestrian.speedMps * pxPerMeter * dt
     );
+
+    let chosenProgress = desiredProgress;
+    let chosenDodgeTarget = 0;
+    let blocker = getBlockingVehicleForPedestrian(
+      pedestrian,
+      getPedestrianPositionAtProgress(pedestrian, desiredProgress, 0)
+    );
+
+    if (blocker) {
+      const dodgeCandidates = getPedestrianDodgeCandidates(pedestrian, blocker);
+      const forwardDodge = dodgeCandidates.find((offset) => (
+        !getBlockingVehicleForPedestrian(
+          pedestrian,
+          getPedestrianPositionAtProgress(pedestrian, desiredProgress, offset)
+        )
+      ));
+
+      if (typeof forwardDodge === "number") {
+        chosenDodgeTarget = forwardDodge;
+      } else {
+        chosenProgress = currentProgress;
+        const lateralDodge = dodgeCandidates.find((offset) => (
+          !getBlockingVehicleForPedestrian(
+            pedestrian,
+            getPedestrianPositionAtProgress(pedestrian, currentProgress, offset)
+          )
+        ));
+        if (typeof lateralDodge === "number") {
+          chosenDodgeTarget = lateralDodge;
+        } else {
+          chosenDodgeTarget = pedestrian.dodgeOffsetPx || 0;
+          pedestrian.speedMps = 0;
+        }
+      }
+    }
+    pedestrian.blockingVehicleId = blocker ? blocker.id : null;
+
+    const relaxedCenterlinePosition = getPedestrianPositionAtProgress(pedestrian, desiredProgress, 0);
+    if (!blocker && !getBlockingVehicleForPedestrian(pedestrian, relaxedCenterlinePosition)) {
+      chosenDodgeTarget = 0;
+    }
+
+    pedestrian.dodgeTargetOffsetPx = chosenDodgeTarget;
+    let nextDodgeOffset;
+    if (blocker && isVehicleStoppedForPedestrian(blocker)) {
+      nextDodgeOffset = pedestrian.dodgeTargetOffsetPx;
+    } else if (
+      chosenProgress === currentProgress &&
+      Math.abs((pedestrian.dodgeOffsetPx || 0) - pedestrian.dodgeTargetOffsetPx) > 0.01
+    ) {
+      nextDodgeOffset = pedestrian.dodgeTargetOffsetPx;
+    } else {
+      nextDodgeOffset = moveToward(
+        pedestrian.dodgeOffsetPx || 0,
+        pedestrian.dodgeTargetOffsetPx,
+        pedestrianDodgeRatePxPerSecond * dt
+      );
+    }
+    let nextPosition = getPedestrianPositionAtProgress(pedestrian, chosenProgress, nextDodgeOffset);
+    const nextBlocker = getBlockingVehicleForPedestrian(pedestrian, nextPosition);
+    if (nextBlocker) {
+      chosenProgress = currentProgress;
+      nextPosition = currentPosition;
+      pedestrian.speedMps = 0;
+    } else {
+      pedestrian.dodgeOffsetPx = nextDodgeOffset;
+      pedestrian.progress = chosenProgress;
+    }
+
+    pedestrian.position = nextPosition;
+    const ratio = Math.min(1, pedestrian.progress / Math.max(1, pedestrian.lengthPx));
     if (ratio < 1) {
       remaining.push(pedestrian);
     }
@@ -795,6 +1092,41 @@ function getThroughDistanceToConflict(vehicle, conflictCoord) {
   return (conflictCoord - getVehicleAxisCoord(vehicle)) * approach.travelSign;
 }
 
+function getNearestPedestrianConflict(vehicle) {
+  if (vehicle.state !== "intersection" || !vehicle.path) {
+    return null;
+  }
+
+  let nearestConflict = null;
+  const halfVehicleLengthPx = (vehicle.length * pxPerMeter) / 2;
+
+  for (const pedestrian of sim.pedestrians) {
+    if (pedestrian.blockingVehicleId === vehicle.id) {
+      continue;
+    }
+
+    const closest = findClosestPathPoint(vehicle.path, pedestrian.position);
+    if (!closest || closest.distance > pedestrianPathConflictThresholdPx) {
+      continue;
+    }
+
+    const distanceAheadPx = closest.progress - vehicle.progress;
+    if (distanceAheadPx < -halfVehicleLengthPx) {
+      continue;
+    }
+
+    const stopProgress = Math.max(vehicle.progress, closest.progress - halfVehicleLengthPx - pedestrianYieldBufferPx);
+    if (!nearestConflict || stopProgress < nearestConflict.stopProgress) {
+      nearestConflict = {
+        pedestrian,
+        stopProgress,
+      };
+    }
+  }
+
+  return nearestConflict;
+}
+
 function idmAcceleration(vehicle, leadObject) {
   const accel = 1.8;
   const decel = 2.6;
@@ -897,11 +1229,21 @@ function updateIntersectionVehicles(dt) {
   const routeGroups = new Map();
 
   for (const vehicle of active) {
-    const shouldYieldInIntersection =
+    const leftTurnYieldActive =
       vehicle.movement === "left" &&
       Number.isFinite(vehicle.yieldProgress) &&
       vehicle.progress <= vehicle.yieldProgress + 0.5 &&
       hasOpposingThroughConflict(vehicle);
+    const pedestrianConflict = getNearestPedestrianConflict(vehicle);
+    const shouldYieldInIntersection = leftTurnYieldActive || Boolean(pedestrianConflict);
+    let maxProgress = Number.POSITIVE_INFINITY;
+
+    if (leftTurnYieldActive) {
+      maxProgress = Math.min(maxProgress, vehicle.yieldProgress);
+    }
+    if (pedestrianConflict) {
+      maxProgress = Math.min(maxProgress, pedestrianConflict.stopProgress);
+    }
 
     if (shouldYieldInIntersection) {
       vehicle.v = Math.max(0, vehicle.v - 3.6 * dt);
@@ -909,7 +1251,6 @@ function updateIntersectionVehicles(dt) {
       vehicle.v = Math.min(vehicle.desiredSpeed, Math.max(vehicle.desiredSpeed * 0.65, vehicle.v + 1.4 * dt));
     }
 
-    const maxProgress = shouldYieldInIntersection ? vehicle.yieldProgress : Number.POSITIVE_INFINITY;
     vehicle.progress = Math.min(vehicle.progress + vehicle.v * pxPerMeter * dt, maxProgress);
 
     if (!routeGroups.has(vehicle.routeKey)) {
@@ -1071,10 +1412,30 @@ function drawRoads() {
   // ctx.setLineDash([]);
 
   ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillRect(approaches.west.stopCoord - 3, roadCenterY + 2, 6, 44);
-  ctx.fillRect(approaches.east.stopCoord - 3, roadCenterY - 46, 6, 44);
-  ctx.fillRect(roadCenterX - 46, approaches.north.stopCoord - 3, 44, 6);
-  ctx.fillRect(roadCenterX + 2, approaches.south.stopCoord - 3, 44, 6);
+  ctx.fillRect(
+    approaches.west.stopCoord - stopLineThicknessPx / 2,
+    roadCenterY + 2,
+    stopLineThicknessPx,
+    stopLineLengthPx
+  );
+  ctx.fillRect(
+    approaches.east.stopCoord - stopLineThicknessPx / 2,
+    roadCenterY - 2 - stopLineLengthPx,
+    stopLineThicknessPx,
+    stopLineLengthPx
+  );
+  ctx.fillRect(
+    roadCenterX - 2 - stopLineLengthPx,
+    approaches.north.stopCoord - stopLineThicknessPx / 2,
+    stopLineLengthPx,
+    stopLineThicknessPx
+  );
+  ctx.fillRect(
+    roadCenterX + 2,
+    approaches.south.stopCoord - stopLineThicknessPx / 2,
+    stopLineLengthPx,
+    stopLineThicknessPx
+  );
 
   drawCrosswalks();
 }
@@ -1089,9 +1450,19 @@ function drawCrosswalks() {
       const cx = crosswalk.start.x + (crosswalk.end.x - crosswalk.start.x) * t;
       const cy = crosswalk.start.y + (crosswalk.end.y - crosswalk.start.y) * t;
       if (isVertical) {
-        ctx.fillRect(cx - crosswalkWidthPx / 2, cy - 6, crosswalkWidthPx, 12);
+        ctx.fillRect(
+          cx - crosswalkWidthPx / 2,
+          cy - crosswalkStripeThicknessPx / 2,
+          crosswalkWidthPx,
+          crosswalkStripeThicknessPx
+        );
       } else {
-        ctx.fillRect(cx - 6, cy - crosswalkWidthPx / 2, 12, crosswalkWidthPx);
+        ctx.fillRect(
+          cx - crosswalkStripeThicknessPx / 2,
+          cy - crosswalkWidthPx / 2,
+          crosswalkStripeThicknessPx,
+          crosswalkWidthPx
+        );
       }
     }
   }
@@ -1099,13 +1470,44 @@ function drawCrosswalks() {
 
 function drawPedestrian(pedestrian) {
   ctx.save();
+  ctx.translate(pedestrian.position.x, pedestrian.position.y);
+
+  const bodyRadius = pedestrian.bodyRadiusPx || pedBodyRadiusPx;
+  const stridePhase = sim.time * (pedestrian.stepFrequencyHz || 1.7) * Math.PI * 2 + (pedestrian.stepPhase || 0);
+  const gaitIntensity = clamp(
+    (pedestrian.speedMps || 0) / Math.max(0.1, pedestrian.desiredSpeedMps || 1),
+    0,
+    1
+  );
+  const limbSwing = Math.sin(stridePhase) * bodyRadius * 0.42 * gaitIntensity;
+  const bodyBob = (1 - Math.cos(stridePhase * 2)) * bodyRadius * 0.06 * gaitIntensity;
+  ctx.translate(0, -bodyBob);
+
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+
   ctx.beginPath();
-  ctx.arc(pedestrian.position.x, pedestrian.position.y, pedBodyRadiusPx, 0, Math.PI * 2);
-  ctx.fillStyle = "#111827";
+  ctx.moveTo(0, -bodyRadius * 0.15);
+  ctx.lineTo(0, bodyRadius * 0.95);
+  ctx.moveTo(0, bodyRadius * 0.25);
+  ctx.lineTo(-limbSwing * 0.9, bodyRadius * 0.9);
+  ctx.moveTo(0, bodyRadius * 0.25);
+  ctx.lineTo(limbSwing * 0.9, bodyRadius * 0.9);
+  ctx.moveTo(0, bodyRadius * 0.95);
+  ctx.lineTo(-limbSwing * 0.75, bodyRadius * 1.95);
+  ctx.moveTo(0, bodyRadius * 0.95);
+  ctx.lineTo(limbSwing * 0.75, bodyRadius * 1.95);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(0, 0, bodyRadius, 0, Math.PI * 2);
+  ctx.fillStyle = "#0f172a";
   ctx.fill();
+
   ctx.beginPath();
-  ctx.arc(pedestrian.position.x, pedestrian.position.y - pedBodyRadiusPx - 3, 2.6, 0, Math.PI * 2);
-  ctx.fillStyle = "#f8d7b5";
+  ctx.arc(0, -bodyRadius - 2.8, bodyRadius * 0.58, 0, Math.PI * 2);
+  ctx.fillStyle = "#f4c7a1";
   ctx.fill();
   ctx.restore();
 }
