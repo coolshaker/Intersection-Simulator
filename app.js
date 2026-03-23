@@ -4,11 +4,13 @@ const ctx = canvas.getContext("2d");
 const controls = {
   green: document.getElementById("green-duration"),
   yellow: document.getElementById("yellow-duration"),
+  allRed: document.getElementById("all-red-duration"),
   red: document.getElementById("red-duration"),
   arrivalRateWest: document.getElementById("arrival-rate-west"),
   arrivalRateEast: document.getElementById("arrival-rate-east"),
   arrivalRateNorth: document.getElementById("arrival-rate-north"),
   arrivalRateSouth: document.getElementById("arrival-rate-south"),
+  pedVolumeTotal: document.getElementById("ped-volume-total"),
   desiredSpeed: document.getElementById("desired-speed"),
   leftTurnRatio: document.getElementById("left-turn-ratio"),
   largeVehicleRatio: document.getElementById("large-vehicle-ratio"),
@@ -42,6 +44,12 @@ const queueDetectionDistancePx = 14 * pxPerMeter;
 const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
+const stopLineOffsetPx = 34;
+const centerlineSetbackPx = 106;
+const crosswalkHalfSpanPx = 54;
+const crosswalkOffsetPx = 28;
+const crosswalkWidthPx = 24;
+const pedBodyRadiusPx = 4.5;
 const defaultMovementRatios = {
   left: 0.23,
   through: 0.53,
@@ -63,7 +71,7 @@ const approaches = {
     axis: "x",
     phaseGroup: "ew",
     spawnCoord: -approachLength,
-    stopCoord: roadCenterX - roadHalfWidth - 10,
+    stopCoord: roadCenterX - roadHalfWidth - stopLineOffsetPx,
     travelSign: 1,
     queueOrder: (a, b) => b.coord - a.coord,
     pathDirection: 0,
@@ -76,7 +84,7 @@ const approaches = {
     axis: "x",
     phaseGroup: "ew",
     spawnCoord: canvas.width + approachLength,
-    stopCoord: roadCenterX + roadHalfWidth + 10,
+    stopCoord: roadCenterX + roadHalfWidth + stopLineOffsetPx,
     travelSign: -1,
     queueOrder: (a, b) => a.coord - b.coord,
     pathDirection: Math.PI,
@@ -89,7 +97,7 @@ const approaches = {
     axis: "y",
     phaseGroup: "ns",
     spawnCoord: -approachLength,
-    stopCoord: roadCenterY - roadHalfWidth - 10,
+    stopCoord: roadCenterY - roadHalfWidth - stopLineOffsetPx,
     travelSign: 1,
     queueOrder: (a, b) => b.coord - a.coord,
     pathDirection: Math.PI / 2,
@@ -102,7 +110,7 @@ const approaches = {
     axis: "y",
     phaseGroup: "ns",
     spawnCoord: canvas.height + approachLength,
-    stopCoord: roadCenterY + roadHalfWidth + 10,
+    stopCoord: roadCenterY + roadHalfWidth + stopLineOffsetPx,
     travelSign: -1,
     queueOrder: (a, b) => a.coord - b.coord,
     pathDirection: -Math.PI / 2,
@@ -112,6 +120,24 @@ const approaches = {
 };
 
 const approachList = Object.values(approaches);
+const crosswalks = {
+  west: {
+    start: point(roadCenterX - roadHalfWidth - crosswalkOffsetPx, roadCenterY - crosswalkHalfSpanPx),
+    end: point(roadCenterX - roadHalfWidth - crosswalkOffsetPx, roadCenterY + crosswalkHalfSpanPx),
+  },
+  east: {
+    start: point(roadCenterX + roadHalfWidth + crosswalkOffsetPx, roadCenterY + crosswalkHalfSpanPx),
+    end: point(roadCenterX + roadHalfWidth + crosswalkOffsetPx, roadCenterY - crosswalkHalfSpanPx),
+  },
+  north: {
+    start: point(roadCenterX + crosswalkHalfSpanPx, roadCenterY - roadHalfWidth - crosswalkOffsetPx),
+    end: point(roadCenterX - crosswalkHalfSpanPx, roadCenterY - roadHalfWidth - crosswalkOffsetPx),
+  },
+  south: {
+    start: point(roadCenterX - crosswalkHalfSpanPx, roadCenterY + roadHalfWidth + crosswalkOffsetPx),
+    end: point(roadCenterX + crosswalkHalfSpanPx, roadCenterY + roadHalfWidth + crosswalkOffsetPx),
+  },
+};
 
 const movementTargets = {
   west: {
@@ -139,8 +165,8 @@ const movementTargets = {
 const turnControlPoints = {
   west: {
     left: [
-      point(roadCenterX - 10, approaches.west.laneCenter),
-      point(roadCenterX + 30, roadCenterY + 18),
+      point(roadCenterX - 34, approaches.west.laneCenter),
+      point(roadCenterX + 30, roadCenterY + 30),
     ],
     right: [
       point(roadCenterX - 4, approaches.west.laneCenter),
@@ -149,8 +175,8 @@ const turnControlPoints = {
   },
   east: {
     left: [
-      point(roadCenterX + 10, approaches.east.laneCenter),
-      point(roadCenterX - 30, roadCenterY - 18),
+      point(roadCenterX + 34, approaches.east.laneCenter),
+      point(roadCenterX - 30, roadCenterY - 30),
     ],
     right: [
       point(roadCenterX + 4, approaches.east.laneCenter),
@@ -159,8 +185,8 @@ const turnControlPoints = {
   },
   north: {
     left: [
-      point(approaches.north.laneCenter, roadCenterY - 10),
-      point(roadCenterX - 18, roadCenterY + 30),
+      point(approaches.north.laneCenter, roadCenterY - 34),
+      point(roadCenterX - 30, roadCenterY + 30),
     ],
     right: [
       point(approaches.north.laneCenter, roadCenterY - 4),
@@ -169,8 +195,8 @@ const turnControlPoints = {
   },
   south: {
     left: [
-      point(approaches.south.laneCenter, roadCenterY + 10),
-      point(roadCenterX + 18, roadCenterY - 30),
+      point(approaches.south.laneCenter, roadCenterY + 34),
+      point(roadCenterX + 30, roadCenterY - 30),
     ],
     right: [
       point(approaches.south.laneCenter, roadCenterY + 4),
@@ -184,8 +210,12 @@ const sim = {
   lastTimestamp: 0,
   time: 0,
   vehicles: [],
+  pedestrians: [],
   nextVehicleId: 1,
+  nextPedestrianId: 1,
   nextArrivalTimes: {},
+  nextPedArrivalTimes: {},
+  pendingPedRequests: {},
   stats: {
     arrivals: 0,
     departures: 0,
@@ -206,6 +236,7 @@ function readConfig() {
   return {
     eastWestGreen: clampNumber(controls.green.value, 5, 120, 18),
     yellow: clampNumber(controls.yellow.value, 2, 20, 4),
+    allRed: clampNumber(controls.allRed.value, 0.5, 10, 2),
     northSouthGreen: clampNumber(controls.red.value, 5, 120, 20),
     arrivalRatePerHour: {
       west: clampNumber(controls.arrivalRateWest.value, 0, 1800, 600),
@@ -213,6 +244,7 @@ function readConfig() {
       north: clampNumber(controls.arrivalRateNorth.value, 0, 1800, 600),
       south: clampNumber(controls.arrivalRateSouth.value, 0, 1800, 600),
     },
+    pedestrianTotalRatePerHour: clampNumber(controls.pedVolumeTotal.value, 0, 12000, 480),
     desiredSpeedMps: clampNumber(controls.desiredSpeed.value, 10, 45, 28) * 0.44704,
     leftTurnRatio: clampNumber(controls.leftTurnRatio.value, 0, 100, 23) / 100,
     largeVehicleRatio: clampNumber(controls.largeVehicleRatio.value, 0, 100, 10) / 100,
@@ -249,12 +281,24 @@ function scheduleNextArrival(approachKey) {
   sim.nextArrivalTimes[approachKey] = sim.time + sampleExponential(ratePerSecond);
 }
 
+function scheduleNextPedArrival(approachKey) {
+  const ratePerHour = sim.config.pedestrianTotalRatePerHour / approachList.length;
+  const ratePerSecond = ratePerHour / 3600;
+  if (ratePerSecond <= 0) {
+    sim.nextPedArrivalTimes[approachKey] = Number.POSITIVE_INFINITY;
+    return;
+  }
+  sim.nextPedArrivalTimes[approachKey] = sim.time + sampleExponential(ratePerSecond);
+}
+
 function resetSimulation() {
   sim.running = false;
   sim.lastTimestamp = 0;
   sim.time = 0;
   sim.vehicles = [];
+  sim.pedestrians = [];
   sim.nextVehicleId = 1;
+  sim.nextPedestrianId = 1;
   sim.stats = {
     arrivals: 0,
     departures: 0,
@@ -270,7 +314,13 @@ function resetSimulation() {
   };
   sim.config = readConfig();
   sim.nextArrivalTimes = {};
+  sim.nextPedArrivalTimes = {};
+  sim.pendingPedRequests = {};
   approachList.forEach((approach) => scheduleNextArrival(approach.key));
+  approachList.forEach((approach) => {
+    scheduleNextPedArrival(approach.key);
+    sim.pendingPedRequests[approach.key] = 0;
+  });
   updateOutputs();
   drawScene();
 }
@@ -432,10 +482,23 @@ function getTotalRealTimeQueueCount() {
 }
 
 function currentSignalDuration() {
+  if (sim.signal.state.endsWith("all-red")) {
+    return sim.config.allRed;
+  }
   if (sim.signal.state.endsWith("yellow")) {
     return sim.config.yellow;
   }
   return sim.signal.state === "ew-green" ? sim.config.eastWestGreen : sim.config.northSouthGreen;
+}
+
+function isApproachVehicleGreen(approachKey) {
+  if (sim.signal.state === "ew-green") {
+    return approaches[approachKey].phaseGroup === "ew";
+  }
+  if (sim.signal.state === "ns-green") {
+    return approaches[approachKey].phaseGroup === "ns";
+  }
+  return false;
 }
 
 function updateSignal(dt) {
@@ -450,10 +513,16 @@ function updateSignal(dt) {
       sim.signal.state = "ew-yellow";
       break;
     case "ew-yellow":
+      sim.signal.state = "ew-all-red";
+      break;
+    case "ew-all-red":
       sim.signal.state = "ns-green";
       break;
     case "ns-green":
       sim.signal.state = "ns-yellow";
+      break;
+    case "ns-yellow":
+      sim.signal.state = "ns-all-red";
       break;
     default:
       sim.signal.state = "ew-green";
@@ -462,13 +531,60 @@ function updateSignal(dt) {
 }
 
 function isVehiclePermitted(vehicle) {
-  if (sim.signal.state === "ew-green") {
-    return approaches[vehicle.approach].phaseGroup === "ew";
+  return isApproachVehicleGreen(vehicle.approach);
+}
+
+function hasActiveCrosswalkPedestrian(approachKey) {
+  return sim.pedestrians.some((pedestrian) => pedestrian.approach === approachKey);
+}
+
+function createPedestrian(approachKey) {
+  const crosswalk = crosswalks[approachKey];
+  const lengthPx = distanceBetween(crosswalk.start, crosswalk.end);
+  const speedMps = 1.0 + Math.random() * 0.7;
+  return {
+    id: sim.nextPedestrianId++,
+    approach: approachKey,
+    progress: 0,
+    speedMps,
+    start: crosswalk.start,
+    end: crosswalk.end,
+    lengthPx,
+    position: crosswalk.start,
+  };
+}
+
+function maybeSpawnPedestrians() {
+  for (const approach of approachList) {
+    while (sim.time >= sim.nextPedArrivalTimes[approach.key]) {
+      sim.pendingPedRequests[approach.key] += 1;
+      scheduleNextPedArrival(approach.key);
+    }
+
+    const hasActive = hasActiveCrosswalkPedestrian(approach.key);
+    const hasDemand = sim.pendingPedRequests[approach.key] > 0;
+    const canStartCrossing = !isApproachVehicleGreen(approach.key);
+    if (!hasActive && hasDemand && canStartCrossing) {
+      sim.pedestrians.push(createPedestrian(approach.key));
+      sim.pendingPedRequests[approach.key] -= 1;
+    }
   }
-  if (sim.signal.state === "ns-green") {
-    return approaches[vehicle.approach].phaseGroup === "ns";
+}
+
+function updatePedestrians(dt) {
+  const remaining = [];
+  for (const pedestrian of sim.pedestrians) {
+    pedestrian.progress += pedestrian.speedMps * pxPerMeter * dt;
+    const ratio = Math.min(1, pedestrian.progress / Math.max(1, pedestrian.lengthPx));
+    pedestrian.position = point(
+      pedestrian.start.x + (pedestrian.end.x - pedestrian.start.x) * ratio,
+      pedestrian.start.y + (pedestrian.end.y - pedestrian.start.y) * ratio,
+    );
+    if (ratio < 1) {
+      remaining.push(pedestrian);
+    }
   }
-  return false;
+  sim.pedestrians = remaining;
 }
 
 function getOpposingApproachKey(approachKey) {
@@ -716,7 +832,7 @@ function updateApproachVehicles(dt) {
         };
       }
 
-      if (!isVehiclePermitted(vehicle)) {
+      if (!isVehiclePermitted(vehicle) || hasActiveCrosswalkPedestrian(approach.key)) {
         const stopGap = Math.abs(approach.stopCoord - vehicle.coord) - (vehicle.length * pxPerMeter) / 2;
         const signalLeader = {
           gap: Math.max(0.5, stopGap / pxPerMeter),
@@ -761,6 +877,7 @@ function updateApproachVehicles(dt) {
 
       const canEnter =
         isVehiclePermitted(vehicle) &&
+        !hasActiveCrosswalkPedestrian(approach.key) &&
         !hasOpposingThroughConflict(vehicle) &&
         (
           (approach.travelSign > 0 && vehicle.coord >= approach.stopCoord + 1) ||
@@ -814,7 +931,32 @@ function updateIntersectionVehicles(dt) {
 
   for (const vehicle of active) {
     const sample = samplePath(vehicle.path, vehicle.progress);
-    vehicle.position = sample.position;
+    let { position } = sample;
+
+    // Prevent left-turners from cutting across the centerline/double-yellow during
+    // the early/yielding portion of the maneuver.
+    if (
+      vehicle.movement === "left" &&
+      Number.isFinite(vehicle.yieldProgress) &&
+      vehicle.progress <= vehicle.yieldProgress
+    ) {
+      const centerMarginPx = 6;
+      if (vehicle.approach === "west") {
+        // West approach lane is below the horizontal centerline.
+        position.y = Math.max(position.y, roadCenterY + centerMarginPx);
+      } else if (vehicle.approach === "east") {
+        // East approach lane is above the horizontal centerline.
+        position.y = Math.min(position.y, roadCenterY - centerMarginPx);
+      } else if (vehicle.approach === "north") {
+        // North approach lane is left of the vertical centerline.
+        position.x = Math.min(position.x, roadCenterX - centerMarginPx);
+      } else if (vehicle.approach === "south") {
+        // South approach lane is right of the vertical centerline.
+        position.x = Math.max(position.x, roadCenterX + centerMarginPx);
+      }
+    }
+
+    vehicle.position = position;
     vehicle.angle = sample.angle;
     updateVehicleViewCounts(vehicle);
 
@@ -836,6 +978,7 @@ function updateIntersectionVehicles(dt) {
 function updateVehicles(dt) {
   updateApproachVehicles(dt);
   updateIntersectionVehicles(dt);
+  updatePedestrians(dt);
 
   const queueCount = getTotalRealTimeQueueCount();
   sim.stats.currentQueue = queueCount;
@@ -852,6 +995,12 @@ function formatSignalState() {
   }
   if (sim.signal.state === "ew-yellow") {
     return "East-West Yellow";
+  }
+  if (sim.signal.state === "ew-all-red") {
+    return "All Red (EW to NS)";
+  }
+  if (sim.signal.state === "ns-all-red") {
+    return "All Red (NS to EW)";
   }
   return "North-South Yellow";
 }
@@ -888,20 +1037,20 @@ function drawRoads() {
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(0, roadCenterY - 5);
-  ctx.lineTo(roadCenterX - 78, roadCenterY - 5);
-  ctx.moveTo(roadCenterX + 78, roadCenterY - 5);
+  ctx.lineTo(roadCenterX - centerlineSetbackPx, roadCenterY - 5);
+  ctx.moveTo(roadCenterX + centerlineSetbackPx, roadCenterY - 5);
   ctx.lineTo(canvas.width, roadCenterY - 5);
   ctx.moveTo(0, roadCenterY + 5);
-  ctx.lineTo(roadCenterX - 78, roadCenterY + 5);
-  ctx.moveTo(roadCenterX + 78, roadCenterY + 5);
+  ctx.lineTo(roadCenterX - centerlineSetbackPx, roadCenterY + 5);
+  ctx.moveTo(roadCenterX + centerlineSetbackPx, roadCenterY + 5);
   ctx.lineTo(canvas.width, roadCenterY + 5);
   ctx.moveTo(roadCenterX - 5, 0);
-  ctx.lineTo(roadCenterX - 5, roadCenterY - 78);
-  ctx.moveTo(roadCenterX - 5, roadCenterY + 78);
+  ctx.lineTo(roadCenterX - 5, roadCenterY - centerlineSetbackPx);
+  ctx.moveTo(roadCenterX - 5, roadCenterY + centerlineSetbackPx);
   ctx.lineTo(roadCenterX - 5, canvas.height);
   ctx.moveTo(roadCenterX + 5, 0);
-  ctx.lineTo(roadCenterX + 5, roadCenterY - 78);
-  ctx.moveTo(roadCenterX + 5, roadCenterY + 78);
+  ctx.lineTo(roadCenterX + 5, roadCenterY - centerlineSetbackPx);
+  ctx.moveTo(roadCenterX + 5, roadCenterY + centerlineSetbackPx);
   ctx.lineTo(roadCenterX + 5, canvas.height);
   ctx.stroke();
 
@@ -922,10 +1071,43 @@ function drawRoads() {
   // ctx.setLineDash([]);
 
   ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillRect(roadCenterX - roadHalfWidth - 10, roadCenterY + 2, 10, 44);
-  ctx.fillRect(roadCenterX + roadHalfWidth, roadCenterY - 46, 10, 44);
-  ctx.fillRect(roadCenterX - 46, roadCenterY - roadHalfWidth - 10, 44, 10);
-  ctx.fillRect(roadCenterX + 2, roadCenterY + roadHalfWidth, 44, 10);
+  ctx.fillRect(approaches.west.stopCoord - 3, roadCenterY + 2, 6, 44);
+  ctx.fillRect(approaches.east.stopCoord - 3, roadCenterY - 46, 6, 44);
+  ctx.fillRect(roadCenterX - 46, approaches.north.stopCoord - 3, 44, 6);
+  ctx.fillRect(roadCenterX + 2, approaches.south.stopCoord - 3, 44, 6);
+
+  drawCrosswalks();
+}
+
+function drawCrosswalks() {
+  ctx.fillStyle = "rgba(255,255,255,0.78)";
+  for (const crosswalk of Object.values(crosswalks)) {
+    const isVertical = Math.abs(crosswalk.start.x - crosswalk.end.x) < 1e-6;
+    const stripeCount = 6;
+    for (let i = 0; i < stripeCount; i += 1) {
+      const t = (i + 0.5) / stripeCount;
+      const cx = crosswalk.start.x + (crosswalk.end.x - crosswalk.start.x) * t;
+      const cy = crosswalk.start.y + (crosswalk.end.y - crosswalk.start.y) * t;
+      if (isVertical) {
+        ctx.fillRect(cx - crosswalkWidthPx / 2, cy - 6, crosswalkWidthPx, 12);
+      } else {
+        ctx.fillRect(cx - 6, cy - crosswalkWidthPx / 2, 12, crosswalkWidthPx);
+      }
+    }
+  }
+}
+
+function drawPedestrian(pedestrian) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pedestrian.position.x, pedestrian.position.y, pedBodyRadiusPx, 0, Math.PI * 2);
+  ctx.fillStyle = "#111827";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(pedestrian.position.x, pedestrian.position.y - pedBodyRadiusPx - 3, 2.6, 0, Math.PI * 2);
+  ctx.fillStyle = "#f8d7b5";
+  ctx.fill();
+  ctx.restore();
 }
 
 function signalColorForApproach(approachKey) {
@@ -1082,6 +1264,7 @@ function drawOverlay() {
 function drawScene() {
   drawRoads();
   drawSignalHeads();
+  sim.pedestrians.forEach(drawPedestrian);
   sim.vehicles.forEach(drawVehicle);
   drawApproachLabels();
   drawOverlay();
@@ -1100,6 +1283,7 @@ function step(timestamp) {
     sim.time += dt;
     updateSignal(dt);
     maybeSpawnVehicles();
+    maybeSpawnPedestrians();
     updateVehicles(dt);
   }
 
@@ -1138,11 +1322,13 @@ controls.reset.addEventListener("click", resetSimulation);
 [
   controls.green,
   controls.yellow,
+  controls.allRed,
   controls.red,
   controls.arrivalRateWest,
   controls.arrivalRateEast,
   controls.arrivalRateNorth,
   controls.arrivalRateSouth,
+  controls.pedVolumeTotal,
   controls.desiredSpeed,
   controls.leftTurnRatio,
   controls.largeVehicleRatio,
@@ -1157,6 +1343,11 @@ controls.reset.addEventListener("click", resetSimulation);
       control === controls.arrivalRateSouth
     ) {
       approachList.forEach((approach) => scheduleNextArrival(approach.key));
+    }
+    if (
+      control === controls.pedVolumeTotal
+    ) {
+      approachList.forEach((approach) => scheduleNextPedArrival(approach.key));
     }
   });
 });

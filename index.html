@@ -42,12 +42,16 @@
             <input id="green-duration" type="number" min="5" max="120" step="1" value="30">
           </label>
           <label class="field">
-            <span>Yellow / Clearance (s)</span>
-            <input id="yellow-duration" type="number" min="2" max="20" step="1" value="5">
-          </label>
-          <label class="field">
             <span>Phase 2: North-South Green (s)</span>
             <input id="red-duration" type="number" min="5" max="120" step="1" value="30">
+          </label>
+          <label class="field">
+            <span>Yellow (s)</span>
+            <input id="yellow-duration" type="number" min="2" max="20" step="1" value="3">
+          </label>
+          <label class="field">
+            <span>All-Red (s)</span>
+            <input id="all-red-duration" type="number" min="0.5" max="10" step="0.5" value="2">
           </label>
           <label class="field">
             <span>Eastbound Arrival (veh/hr)</span>
@@ -64,6 +68,10 @@
           <label class="field">
             <span>Northbound Arrival (veh/hr)</span>
             <input id="arrival-rate-south" type="number" min="0" max="1800" step="10" value="500">
+          </label>
+          <label class="field">
+            <span>Total Pedestrian Volume (ped/hr)</span>
+            <input id="ped-volume-total" type="number" min="0" max="12000" step="20" value="480">
           </label>
           <label class="field">
             <span>Free-Flow Speed (mph)</span>
