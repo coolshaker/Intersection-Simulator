@@ -13,6 +13,7 @@ const controls = {
   pedVolumeTotal: document.getElementById("ped-volume-total"),
   desiredSpeed: document.getElementById("desired-speed"),
   leftTurnRatio: document.getElementById("left-turn-ratio"),
+  rightTurnRatio: document.getElementById("right-turn-ratio"),
   largeVehicleRatio: document.getElementById("large-vehicle-ratio"),
   simSpeed: document.getElementById("sim-speed"),
   simSpeedLabel: document.getElementById("sim-speed-label"),
@@ -34,23 +35,27 @@ const statEls = {
 
 const pxPerMeter = 5.2;
 const roadCenterX = 520;
-const roadCenterY = 280;
+const roadCenterY = canvas.height / 2;
 const roadHalfWidth = 60;
 const approachLength = 420;
 const exitLength = 220;
 const minVehicleGapPx = 12.0 * pxPerMeter + 8;  // Based on max vehicle length (12m) + buffer
+const intersectionEntryAwarenessDistancePx = minVehicleGapPx + 12;
 const opposingThroughYieldDistancePx = 190;
 const queueDetectionDistancePx = 14 * pxPerMeter;
 const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
-const stopLineOffsetPx = 44;
+const crosswalkHalfSpanPx = 60;
+const crosswalkWidthPx = 28;
+const crosswalkInnerSetbackPx = 19;
+const crosswalkOffsetPx = crosswalkInnerSetbackPx + crosswalkWidthPx / 2;
+const stopLineGapFromCrosswalkPx = 7;
+const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
 const stopLineThicknessPx = 6;
 const stopLineLengthPx = 44;
-const centerlineSetbackPx = 106;
-const crosswalkHalfSpanPx = 54;
-const crosswalkOffsetPx = 28;
-const crosswalkWidthPx = 18;
+const centerlineEndClearancePx = stopLineThicknessPx / 2 + 6;
+const centerlineSetbackPx = roadHalfWidth + stopLineOffsetPx + centerlineEndClearancePx;
 const crosswalkStripeThicknessPx = 8;
 const pedBodyRadiusPx = 4.5;
 const pedestrianPathConflictThresholdPx = 16;
@@ -62,6 +67,8 @@ const pedestrianEndSlowdownDistancePx = 18;
 const pedestrianComfortGapPx = 26;
 const pedestrianLeadVehicleSpeedThresholdMps = 1.8;
 const pedestrianLateralOffsetPx = 4.5;
+const pedestrianLaneOffsetsPx = [-9, 0, 9];
+const pedestrianSpawnSpacingPx = 24;
 const pedestrianSwayAmplitudePx = 1.3;
 const pedestrianVehicleClearancePx = 2.5;
 const pedestrianMaxDodgeOffsetPx = 8;
@@ -69,12 +76,6 @@ const pedestrianStoppedVehicleDodgeOffsetPx = 16;
 const pedestrianDodgeRatePxPerSecond = 28;
 const pedestrianStoppedVehicleSpeedThresholdMps = 0.15;
 const pedestrianLargeVehicleBypassMarginPx = 6;
-const defaultMovementRatios = {
-  left: 0.23,
-  through: 0.53,
-  right: 0.24,
-};
-
 function point(x, y) {
   return { x, y };
 }
@@ -85,6 +86,12 @@ function distanceBetween(a, b) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getFollowingGapPx(approach, leaderCoord, leaderLength, followerCoord, followerLength) {
+  const leaderRearCoord = leaderCoord - approach.travelSign * (leaderLength * pxPerMeter) / 2;
+  const followerFrontCoord = followerCoord + approach.travelSign * (followerLength * pxPerMeter) / 2;
+  return (leaderRearCoord - followerFrontCoord) * approach.travelSign;
 }
 
 function distancePointToSegment(target, start, end) {
@@ -328,21 +335,26 @@ const sim = {
 };
 
 function readConfig() {
+  const leftTurnRatio = clampNumber(controls.leftTurnRatio.value, 0, 100, 5) / 100;
+  const requestedRightTurnRatio = clampNumber(controls.rightTurnRatio.value, 0, 100, 5) / 100;
+  const rightTurnRatio = Math.min(requestedRightTurnRatio, 1 - leftTurnRatio);
+
   return {
     eastWestGreen: clampNumber(controls.green.value, 5, 120, 18),
     yellow: clampNumber(controls.yellow.value, 2, 20, 4),
     allRed: clampNumber(controls.allRed.value, 0.5, 10, 2),
     northSouthGreen: clampNumber(controls.red.value, 5, 120, 20),
     arrivalRatePerHour: {
-      west: clampNumber(controls.arrivalRateWest.value, 0, 1800, 600),
-      east: clampNumber(controls.arrivalRateEast.value, 0, 1800, 600),
-      north: clampNumber(controls.arrivalRateNorth.value, 0, 1800, 600),
-      south: clampNumber(controls.arrivalRateSouth.value, 0, 1800, 600),
+      west: clampNumber(controls.arrivalRateWest.value, 0, 1800, 300),
+      east: clampNumber(controls.arrivalRateEast.value, 0, 1800, 300),
+      north: clampNumber(controls.arrivalRateNorth.value, 0, 1800, 300),
+      south: clampNumber(controls.arrivalRateSouth.value, 0, 1800, 300),
     },
-    pedestrianTotalRatePerHour: clampNumber(controls.pedVolumeTotal.value, 0, 12000, 480),
+    pedestrianTotalRatePerHour: clampNumber(controls.pedVolumeTotal.value, 0, 12000, 100),
     desiredSpeedMps: clampNumber(controls.desiredSpeed.value, 10, 45, 28) * 0.44704,
-    leftTurnRatio: clampNumber(controls.leftTurnRatio.value, 0, 100, 23) / 100,
-    largeVehicleRatio: clampNumber(controls.largeVehicleRatio.value, 0, 100, 10) / 100,
+    leftTurnRatio,
+    rightTurnRatio,
+    largeVehicleRatio: clampNumber(controls.largeVehicleRatio.value, 0, 100, 5) / 100,
     simSpeed: clampNumber(controls.simSpeed.value, 0.5, 10, 1),
   };
 }
@@ -422,11 +434,8 @@ function resetSimulation() {
 
 function pickMovement() {
   const leftTurnRatio = sim.config.leftTurnRatio;
-  const remainingRatio = Math.max(0, 1 - leftTurnRatio);
-  const nonLeftDefaultTotal = defaultMovementRatios.through + defaultMovementRatios.right;
-  const throughRatio = nonLeftDefaultTotal > 0
-    ? remainingRatio * (defaultMovementRatios.through / nonLeftDefaultTotal)
-    : remainingRatio;
+  const rightTurnRatio = Math.min(sim.config.rightTurnRatio, Math.max(0, 1 - leftTurnRatio));
+  const throughRatio = Math.max(0, 1 - leftTurnRatio - rightTurnRatio);
   const roll = Math.random();
   if (roll < leftTurnRatio) {
     return "left";
@@ -633,6 +642,10 @@ function hasActiveCrosswalkPedestrian(approachKey) {
   return sim.pedestrians.some((pedestrian) => pedestrian.approach === approachKey);
 }
 
+function getCrosswalkPedestrians(approachKey) {
+  return sim.pedestrians.filter((pedestrian) => pedestrian.approach === approachKey);
+}
+
 function isPedestrianEntryComfortable(approachKey) {
   const queue = getApproachQueue(approachKey);
   const leadVehicle = queue[0];
@@ -649,11 +662,28 @@ function isPedestrianEntryComfortable(approachKey) {
   return !isVehiclePermitted(leadVehicle) && leadVehicle.v <= pedestrianLeadVehicleSpeedThresholdMps;
 }
 
-function createPedestrian(approachKey) {
+function getAvailablePedestrianLaneOffset(approachKey) {
+  const crosswalkPedestrians = getCrosswalkPedestrians(approachKey);
+
+  for (const laneOffsetPx of pedestrianLaneOffsetsPx) {
+    const laneOccupiedNearEntry = crosswalkPedestrians.some((pedestrian) => (
+      Math.abs((pedestrian.laneOffsetPx ?? pedestrian.lateralOffsetPx ?? 0) - laneOffsetPx) < 2 &&
+      pedestrian.progress < pedestrianSpawnSpacingPx
+    ));
+
+    if (!laneOccupiedNearEntry) {
+      return laneOffsetPx;
+    }
+  }
+
+  return null;
+}
+
+function createPedestrian(approachKey, laneOffsetPx = 0) {
   const crosswalk = crosswalks[approachKey];
   const direction = normalizeVector(crosswalk.end.x - crosswalk.start.x, crosswalk.end.y - crosswalk.start.y);
   const normal = point(-direction.y, direction.x);
-  const baseOffsetPx = (Math.random() * 2 - 1) * pedestrianLateralOffsetPx;
+  const baseOffsetPx = laneOffsetPx + (Math.random() * 2 - 1) * pedestrianLateralOffsetPx * 0.35;
   const start = point(
     crosswalk.start.x + normal.x * baseOffsetPx,
     crosswalk.start.y + normal.y * baseOffsetPx
@@ -678,6 +708,7 @@ function createPedestrian(approachKey) {
     stepFrequencyHz,
     stepPhase: Math.random() * Math.PI * 2,
     swayAmplitudePx,
+    laneOffsetPx,
     lateralOffsetPx: baseOffsetPx,
     startDelayS,
     start,
@@ -699,11 +730,13 @@ function maybeSpawnPedestrians() {
       scheduleNextPedArrival(approach.key);
     }
 
-    const hasActive = hasActiveCrosswalkPedestrian(approach.key);
-    const hasDemand = sim.pendingPedRequests[approach.key] > 0;
     const canStartCrossing = !isApproachVehicleGreen(approach.key) && isPedestrianEntryComfortable(approach.key);
-    if (!hasActive && hasDemand && canStartCrossing) {
-      sim.pedestrians.push(createPedestrian(approach.key));
+    while (sim.pendingPedRequests[approach.key] > 0 && canStartCrossing) {
+      const laneOffsetPx = getAvailablePedestrianLaneOffset(approach.key);
+      if (laneOffsetPx === null) {
+        break;
+      }
+      sim.pedestrians.push(createPedestrian(approach.key, laneOffsetPx));
       sim.pendingPedRequests[approach.key] -= 1;
     }
   }
@@ -1087,6 +1120,42 @@ function getVehicleAxisCoord(vehicle) {
   return approach.axis === "x" ? vehicle.position.x : vehicle.position.y;
 }
 
+function getSameApproachIntersectionLeader(vehicle) {
+  const approach = approaches[vehicle.approach];
+  let nearestLeader = null;
+
+  for (const other of sim.vehicles) {
+    if (other.id === vehicle.id || other.approach !== vehicle.approach || other.state !== "intersection") {
+      continue;
+    }
+
+    if (other.progress > intersectionEntryAwarenessDistancePx) {
+      continue;
+    }
+
+    const gapPx = getFollowingGapPx(
+      approach,
+      getVehicleAxisCoord(other),
+      other.length,
+      vehicle.coord,
+      vehicle.length,
+    );
+
+    if (gapPx < -0.5) {
+      continue;
+    }
+
+    if (!nearestLeader || gapPx < nearestLeader.gapPx) {
+      nearestLeader = {
+        vehicle: other,
+        gapPx,
+      };
+    }
+  }
+
+  return nearestLeader;
+}
+
 function getThroughDistanceToConflict(vehicle, conflictCoord) {
   const approach = approaches[vehicle.approach];
   return (conflictCoord - getVehicleAxisCoord(vehicle)) * approach.travelSign;
@@ -1154,14 +1223,25 @@ function updateApproachVehicles(dt) {
     for (let i = 0; i < queue.length; i += 1) {
       const vehicle = queue[i];
       const leader = i === 0 ? null : queue[i - 1];
+      const intersectionLeader = leader ? null : getSameApproachIntersectionLeader(vehicle);
       let leadObject = null;
 
       if (leader) {
-        const gap = Math.abs(leader.coord - vehicle.coord) - leader.length * pxPerMeter;
+        const gap = getFollowingGapPx(approach, leader.coord, leader.length, vehicle.coord, vehicle.length);
         leadObject = {
           gap: Math.max(0.5, gap / pxPerMeter),
           speed: leader.v,
         };
+      }
+
+      if (intersectionLeader) {
+        const entryLeader = {
+          gap: Math.max(0.5, intersectionLeader.gapPx / pxPerMeter),
+          speed: intersectionLeader.vehicle.v,
+        };
+        if (!leadObject || entryLeader.gap < leadObject.gap) {
+          leadObject = entryLeader;
+        }
       }
 
       if (!isVehiclePermitted(vehicle) || hasActiveCrosswalkPedestrian(approach.key)) {
@@ -1192,6 +1272,7 @@ function updateApproachVehicles(dt) {
     for (let i = 0; i < queue.length; i += 1) {
       const vehicle = queue[i];
       const leader = i === 0 ? null : queue[i - 1];
+      const intersectionLeader = leader ? null : getSameApproachIntersectionLeader(vehicle);
       vehicle.v = Math.max(0, vehicle.v + vehicle.a * dt);
       vehicle.coord += approach.travelSign * vehicle.v * pxPerMeter * dt;
 
@@ -1201,6 +1282,14 @@ function updateApproachVehicles(dt) {
         } else {
           vehicle.coord = Math.max(vehicle.coord, leader.coord + minVehicleGapPx);
         }
+      } else if (intersectionLeader) {
+        const leaderCoord = getVehicleAxisCoord(intersectionLeader.vehicle);
+        if (approach.travelSign > 0) {
+          vehicle.coord = Math.min(vehicle.coord, leaderCoord - minVehicleGapPx);
+        } else {
+          vehicle.coord = Math.max(vehicle.coord, leaderCoord + minVehicleGapPx);
+        }
+        vehicle.v = Math.min(vehicle.v, intersectionLeader.vehicle.v);
       }
 
       vehicle.position = getVehiclePosition(approach, vehicle.coord);
@@ -1733,6 +1822,7 @@ controls.reset.addEventListener("click", resetSimulation);
   controls.pedVolumeTotal,
   controls.desiredSpeed,
   controls.leftTurnRatio,
+  controls.rightTurnRatio,
   controls.largeVehicleRatio,
   controls.simSpeed,
 ].forEach((control) => {

@@ -55,23 +55,23 @@
           </label>
           <label class="field">
             <span>Eastbound Arrival (veh/hr)</span>
-            <input id="arrival-rate-west" type="number" min="0" max="1800" step="10" value="500">
+            <input id="arrival-rate-west" type="number" min="0" max="1800" step="10" value="300">
           </label>
           <label class="field">
             <span>Westbound Arrival (veh/hr)</span>
-            <input id="arrival-rate-east" type="number" min="0" max="1800" step="10" value="500">
+            <input id="arrival-rate-east" type="number" min="0" max="1800" step="10" value="300">
           </label>
           <label class="field">
             <span>Southbound Arrival (veh/hr)</span>
-            <input id="arrival-rate-north" type="number" min="0" max="1800" step="10" value="500">
+            <input id="arrival-rate-north" type="number" min="0" max="1800" step="10" value="300">
           </label>
           <label class="field">
             <span>Northbound Arrival (veh/hr)</span>
-            <input id="arrival-rate-south" type="number" min="0" max="1800" step="10" value="500">
+            <input id="arrival-rate-south" type="number" min="0" max="1800" step="10" value="300">
           </label>
           <label class="field">
             <span>Total Pedestrian Volume (ped/hr)</span>
-            <input id="ped-volume-total" type="number" min="0" max="12000" step="20" value="480">
+            <input id="ped-volume-total" type="number" min="0" max="12000" step="20" value="100">
           </label>
           <label class="field">
             <span>Free-Flow Speed (mph)</span>
@@ -79,11 +79,15 @@
           </label>
           <label class="field">
             <span>Left Turn Ratio (%)</span>
-            <input id="left-turn-ratio" type="number" min="0" max="100" step="1" value="15">
+            <input id="left-turn-ratio" type="number" min="0" max="100" step="1" value="5">
+          </label>
+          <label class="field">
+            <span>Right Turn Ratio (%)</span>
+            <input id="right-turn-ratio" type="number" min="0" max="100" step="1" value="5">
           </label>
           <label class="field">
             <span>Large Vehicle Ratio (%)</span>
-            <input id="large-vehicle-ratio" type="number" min="0" max="100" step="1" value="10">
+            <input id="large-vehicle-ratio" type="number" min="0" max="100" step="1" value="5">
           </label>
           <label class="field">
             <span>Simulation Speed</span>
@@ -104,7 +108,7 @@
           <h2>Intersection View</h2>
           <p>Each approach uses a single lane. East-west and north-south traffic alternate in a simple two-phase signal cycle.</p>
         </div>
-        <canvas id="sim-canvas" width="1000" height="560" aria-label="Intersection simulation display" title="Click to start or pause the simulation"></canvas>
+        <canvas id="sim-canvas" width="1000" height="840" aria-label="Intersection simulation display" title="Click to start or pause the simulation"></canvas>
         <div class="legend">
           <span><i class="dot green"></i> Active Signal</span>
           <span><i class="dot yellow"></i> Yellow</span>

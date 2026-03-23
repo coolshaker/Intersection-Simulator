@@ -1,19 +1,25 @@
 const fs = require("fs");
 const path = require("path");
 
-const canvas = { width: 1000, height: 560 };
+const canvas = { width: 1000, height: 840 };
 const pxPerMeter = 5.2;
 const roadCenterX = 520;
-const roadCenterY = 280;
+const roadCenterY = canvas.height / 2;
 const roadHalfWidth = 60;
 const approachLength = 420;
 const exitLength = 220;
 const minVehicleGapPx = 12.0 * pxPerMeter + 8;
+const intersectionEntryAwarenessDistancePx = minVehicleGapPx + 12;
 const opposingThroughYieldDistancePx = 190;
 const queueDetectionDistancePx = 14 * pxPerMeter;
 const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
+const crosswalkWidthPx = 28;
+const crosswalkInnerSetbackPx = 19;
+const crosswalkOffsetPx = crosswalkInnerSetbackPx + crosswalkWidthPx / 2;
+const stopLineGapFromCrosswalkPx = 7;
+const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
 const defaultMovementRatios = {
   left: 0.23,
   through: 0.53,
@@ -26,6 +32,12 @@ function point(x, y) {
 
 function distanceBetween(a, b) {
   return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function getFollowingGapPx(approach, leaderCoord, leaderLength, followerCoord, followerLength) {
+  const leaderRearCoord = leaderCoord - approach.travelSign * (leaderLength * pxPerMeter) / 2;
+  const followerFrontCoord = followerCoord + approach.travelSign * (followerLength * pxPerMeter) / 2;
+  return (leaderRearCoord - followerFrontCoord) * approach.travelSign;
 }
 
 function createRng(seed) {
@@ -46,7 +58,7 @@ const approaches = {
     axis: "x",
     phaseGroup: "ew",
     spawnCoord: -approachLength,
-    stopCoord: roadCenterX - roadHalfWidth - 10,
+    stopCoord: roadCenterX - roadHalfWidth - stopLineOffsetPx,
     travelSign: 1,
     queueOrder: (a, b) => b.coord - a.coord,
     pathDirection: 0,
@@ -58,7 +70,7 @@ const approaches = {
     axis: "x",
     phaseGroup: "ew",
     spawnCoord: canvas.width + approachLength,
-    stopCoord: roadCenterX + roadHalfWidth + 10,
+    stopCoord: roadCenterX + roadHalfWidth + stopLineOffsetPx,
     travelSign: -1,
     queueOrder: (a, b) => a.coord - b.coord,
     pathDirection: Math.PI,
@@ -70,7 +82,7 @@ const approaches = {
     axis: "y",
     phaseGroup: "ns",
     spawnCoord: -approachLength,
-    stopCoord: roadCenterY - roadHalfWidth - 10,
+    stopCoord: roadCenterY - roadHalfWidth - stopLineOffsetPx,
     travelSign: 1,
     queueOrder: (a, b) => b.coord - a.coord,
     pathDirection: Math.PI / 2,
@@ -82,7 +94,7 @@ const approaches = {
     axis: "y",
     phaseGroup: "ns",
     spawnCoord: canvas.height + approachLength,
-    stopCoord: roadCenterY + roadHalfWidth + 10,
+    stopCoord: roadCenterY + roadHalfWidth + stopLineOffsetPx,
     travelSign: -1,
     queueOrder: (a, b) => a.coord - b.coord,
     pathDirection: -Math.PI / 2,
@@ -501,6 +513,42 @@ function createSimulation(config, seed) {
     return approach.axis === "x" ? vehicle.position.x : vehicle.position.y;
   }
 
+  function getSameApproachIntersectionLeader(vehicle) {
+    const approach = approaches[vehicle.approach];
+    let nearestLeader = null;
+
+    for (const other of sim.vehicles) {
+      if (other.id === vehicle.id || other.approach !== vehicle.approach || other.state !== "intersection") {
+        continue;
+      }
+
+      if (other.progress > intersectionEntryAwarenessDistancePx) {
+        continue;
+      }
+
+      const gapPx = getFollowingGapPx(
+        approach,
+        getVehicleAxisCoord(other),
+        other.length,
+        vehicle.coord,
+        vehicle.length,
+      );
+
+      if (gapPx < -0.5) {
+        continue;
+      }
+
+      if (!nearestLeader || gapPx < nearestLeader.gapPx) {
+        nearestLeader = {
+          vehicle: other,
+          gapPx,
+        };
+      }
+    }
+
+    return nearestLeader;
+  }
+
   function getThroughDistanceToConflict(vehicle, conflictCoord) {
     const approach = approaches[vehicle.approach];
     return (conflictCoord - getVehicleAxisCoord(vehicle)) * approach.travelSign;
@@ -585,14 +633,25 @@ function createSimulation(config, seed) {
       for (let i = 0; i < queue.length; i += 1) {
         const vehicle = queue[i];
         const leader = i === 0 ? null : queue[i - 1];
+        const intersectionLeader = leader ? null : getSameApproachIntersectionLeader(vehicle);
         let leadObject = null;
 
         if (leader) {
-          const gap = Math.abs(leader.coord - vehicle.coord) - leader.length * pxPerMeter;
+          const gap = getFollowingGapPx(approach, leader.coord, leader.length, vehicle.coord, vehicle.length);
           leadObject = {
             gap: Math.max(0.5, gap / pxPerMeter),
             speed: leader.v,
           };
+        }
+
+        if (intersectionLeader) {
+          const entryLeader = {
+            gap: Math.max(0.5, intersectionLeader.gapPx / pxPerMeter),
+            speed: intersectionLeader.vehicle.v,
+          };
+          if (!leadObject || entryLeader.gap < leadObject.gap) {
+            leadObject = entryLeader;
+          }
         }
 
         if (!isVehiclePermitted(vehicle)) {
@@ -623,6 +682,7 @@ function createSimulation(config, seed) {
       for (let i = 0; i < queue.length; i += 1) {
         const vehicle = queue[i];
         const leader = i === 0 ? null : queue[i - 1];
+        const intersectionLeader = leader ? null : getSameApproachIntersectionLeader(vehicle);
         vehicle.v = Math.max(0, vehicle.v + vehicle.a * dt);
         vehicle.coord += approach.travelSign * vehicle.v * pxPerMeter * dt;
 
@@ -632,6 +692,14 @@ function createSimulation(config, seed) {
           } else {
             vehicle.coord = Math.max(vehicle.coord, leader.coord + minVehicleGapPx);
           }
+        } else if (intersectionLeader) {
+          const leaderCoord = getVehicleAxisCoord(intersectionLeader.vehicle);
+          if (approach.travelSign > 0) {
+            vehicle.coord = Math.min(vehicle.coord, leaderCoord - minVehicleGapPx);
+          } else {
+            vehicle.coord = Math.max(vehicle.coord, leaderCoord + minVehicleGapPx);
+          }
+          vehicle.v = Math.min(vehicle.v, intersectionLeader.vehicle.v);
         }
 
         vehicle.position = getVehiclePosition(approach, vehicle.coord);
