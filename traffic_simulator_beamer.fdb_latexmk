@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1774207224.20585 "c:/Users/Kevin/Dropbox/ODU/Teaching/CEE370 Transportation Fundamentals - Current/Intersection Simulator/traffic_simulator_beamer.tex" "traffic_simulator_beamer.pdf" "traffic_simulator_beamer" 1774207226.38035 0
+["pdflatex"] 1774210084.8729 "c:/Users/Kevin/Dropbox/ODU/Teaching/CEE370 Transportation Fundamentals - Current/Intersection Simulator/traffic_simulator_beamer.tex" "traffic_simulator_beamer.pdf" "traffic_simulator_beamer" 1774210087.11878 0
   "C:/Users/Kevin/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1774205140 81088 29d6fa367ac022d1b69251d68c0742e6 ""
   "C:/Users/Kevin/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1767125315 24225047 4476c11eb009944491480c8c8d4ba3bf ""
   "C:/Users/Kevin/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc" 1256929440 2375 baa924870cfb487815765f9094cf3728 ""
@@ -265,12 +265,12 @@
   "C:/Users/Kevin/AppData/Local/Programs/MiKTeX/tex/latex/translator/translator.sty" 1622471510 8765 56d370785f0143111ff9898b5adfe08e ""
   "C:/Users/Kevin/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "C:/Users/Kevin/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/xcolor.sty" 1700127522 55487 80a65caedd3722f4c20a14a69e785d8f ""
-  "c:/Users/Kevin/Dropbox/ODU/Teaching/CEE370 Transportation Fundamentals - Current/Intersection Simulator/traffic_simulator_beamer.tex" 1774207223 9806 2f2d2e4f8027d5af20873faaa2ecf18e ""
-  "traffic_simulator_beamer.aux" 1774207226 2913 3368bced603f432b92dfc6e2bce75e5f "pdflatex"
-  "traffic_simulator_beamer.nav" 1774207226 1755 52b6f71307d7096ca6b55d99837f5ccc "pdflatex"
-  "traffic_simulator_beamer.out" 1774207226 428 2533940b7144585c770742920e8cccfa "pdflatex"
-  "traffic_simulator_beamer.tex" 1774207223 9806 2f2d2e4f8027d5af20873faaa2ecf18e ""
-  "traffic_simulator_beamer.toc" 1774207226 222 57a455869a5d04dab59656b19a46004d "pdflatex"
+  "c:/Users/Kevin/Dropbox/ODU/Teaching/CEE370 Transportation Fundamentals - Current/Intersection Simulator/traffic_simulator_beamer.tex" 1774210084 9806 2f2d2e4f8027d5af20873faaa2ecf18e ""
+  "traffic_simulator_beamer.aux" 1774210086 2913 3368bced603f432b92dfc6e2bce75e5f "pdflatex"
+  "traffic_simulator_beamer.nav" 1774210086 1755 52b6f71307d7096ca6b55d99837f5ccc "pdflatex"
+  "traffic_simulator_beamer.out" 1774210086 428 2533940b7144585c770742920e8cccfa "pdflatex"
+  "traffic_simulator_beamer.tex" 1774210084 9806 2f2d2e4f8027d5af20873faaa2ecf18e ""
+  "traffic_simulator_beamer.toc" 1774210086 222 57a455869a5d04dab59656b19a46004d "pdflatex"
   (generated)
   "traffic_simulator_beamer.aux"
   "traffic_simulator_beamer.log"
