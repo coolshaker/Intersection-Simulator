@@ -27,7 +27,7 @@ Norfolk, Virginia, USA\\
 \maketitle
 
 \begin{abstract}
-This paper presents a browser-based signalized intersection simulator developed for transportation engineering education. The simulator represents a four-leg intersection with one inbound lane per approach, stochastic arrivals, left/through/right turning movements, pedestrian crossings, and a two-phase signal controller with green, yellow, and all-red intervals. The model is intended for classroom use rather than field calibration, with emphasis on transparency, responsiveness, and operational interpretation. Particular attention is given to the simulator's control logic and crash-avoidance behavior. Vehicles respond to stop lines, signal indication, leading vehicles, pedestrians, and permissive left-turn conflicts. Pedestrians respond to signal opportunity, nearby vehicles, and in-crosswalk obstructions. A six-scenario evaluation illustrates how changes in turning demand, truck share, pedestrian activity, and directional imbalance affect average delay, queueing, and throughput. The results show especially strong degradation under heavier pedestrian demand and demonstrate that reallocating green time to the dominant east-west phase improves throughput under directional imbalance. The resulting tool supports instruction in queueing, delay, permissive turning, pedestrian interaction, and the relationship between control settings and intersection performance.
+This paper presents a browser-based signalized intersection simulator developed for transportation engineering education. The simulator represents a four-leg intersection with one inbound lane per approach, stochastic arrivals, left/through/right turning movements, pedestrian crossings, and a two-phase signal controller with red, green, yellow, and all-red intervals. The model is intended for classroom use rather than field calibration, with emphasis on transparency, responsiveness, and operational interpretation. Particular attention is given to the simulator's control logic and crash-avoidance behavior. Vehicles respond to stop lines, signal indication, leading vehicles, pedestrians, and permissive left-turn conflicts. Pedestrians respond to signal opportunity, nearby vehicles, and in-crosswalk obstructions. A six-scenario evaluation illustrates how changes in turning demand, truck share, pedestrian activity, and directional imbalance affect average delay, queueing, and throughput. The results show especially strong degradation under heavier pedestrian demand and demonstrate that reallocating green time to the dominant east-west phase improves throughput under directional imbalance. The resulting tool supports instruction in queueing, delay, permissive turning, pedestrian interaction, and the relationship between control settings and intersection performance.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -386,13 +386,13 @@ The Intersection Simulator provides a compact and accessible platform for teachi
 \begin{thebibliography}{00}
 
 \bibitem{webster1958}
-F.~V.~Webster, \emph{Traffic Signal Settings}, Road Research Technical Paper No.~39. London, U.K.: H.M. Stationery Office, 1958.
+F.~V.~Webster, \emph{Traffic Signal Settings}, Road Research Laboratory, Road Research Technical Paper No.~39. London, U.K.: H.M. Stationery Office, 1958.
 
 \bibitem{stm2015}
 National Academies of Sciences, Engineering, and Medicine, \emph{Signal Timing Manual -- Second Edition}. Washington, DC, USA: The National Academies Press, 2015, doi: 10.17226/22097.
 
 \bibitem{hcm2016}
-Transportation Research Board, \emph{Highway Capacity Manual, Sixth Edition: A Guide for Multimodal Mobility Analysis}. Washington, DC, USA: The National Academies Press, 2016, doi: 10.17226/24798.
+Transportation Research Board, \emph{Highway Capacity Manual 6th Edition: A Guide for Multimodal Mobility Analysis}. Washington, DC, USA: The National Academies Press, 2016, doi: 10.17226/24798.
 
 \bibitem{treiber2000}
 M.~Treiber, A.~Hennecke, and D.~Helbing, ``Congested traffic states in empirical observations and microscopic simulations,'' \emph{Physical Review E}, vol.~62, no.~2, pp.~1805--1824, 2000, doi: 10.1103/PhysRevE.62.1805.
