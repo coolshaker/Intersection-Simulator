@@ -11,6 +11,7 @@ const controls = {
   arrivalRateNorth: document.getElementById("arrival-rate-north"),
   arrivalRateSouth: document.getElementById("arrival-rate-south"),
   pedVolumeTotal: document.getElementById("ped-volume-total"),
+  pedestrianSpeed: document.getElementById("pedestrian-speed"),
   desiredSpeed: document.getElementById("desired-speed"),
   leftTurnRatio: document.getElementById("left-turn-ratio"),
   rightTurnRatio: document.getElementById("right-turn-ratio"),
@@ -354,6 +355,7 @@ function readConfig() {
       south: clampNumber(controls.arrivalRateSouth.value, 0, 1800, 300),
     },
     pedestrianTotalRatePerHour: clampNumber(controls.pedVolumeTotal.value, 0, 12000, 100),
+    pedestrianDesiredSpeedMps: clampNumber(controls.pedestrianSpeed.value, 0.5, 10, 3.5),
     desiredSpeedMps: clampNumber(controls.desiredSpeed.value, 10, 45, 28) * 0.44704,
     leftTurnRatio,
     rightTurnRatio,
@@ -732,7 +734,7 @@ function createPedestrian(approachKey, laneOffsetPx = 0) {
     crosswalk.end.y + normal.y * baseOffsetPx
   );
   const lengthPx = distanceBetween(start, end);
-  const desiredSpeedMps = 0.95 + Math.random() * 0.65;
+  const desiredSpeedMps = sim.config.pedestrianDesiredSpeedMps;
   const bodyRadiusPx = pedBodyRadiusPx * (0.9 + Math.random() * 0.22);
   const stepFrequencyHz = 1.45 + desiredSpeedMps * 0.55 + Math.random() * 0.35;
   const swayAmplitudePx = pedestrianSwayAmplitudePx * (0.7 + Math.random() * 0.7);
@@ -1982,6 +1984,7 @@ controls.reset.addEventListener("click", resetSimulation);
   controls.arrivalRateNorth,
   controls.arrivalRateSouth,
   controls.pedVolumeTotal,
+  controls.pedestrianSpeed,
   controls.desiredSpeed,
   controls.leftTurnRatio,
   controls.rightTurnRatio,
