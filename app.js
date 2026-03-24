@@ -42,10 +42,12 @@ const exitLength = 220;
 const minVehicleGapPx = 12.0 * pxPerMeter + 8;  // Based on max vehicle length (12m) + buffer
 const intersectionEntryAwarenessDistancePx = minVehicleGapPx + 12;
 const opposingThroughYieldDistancePx = 190;
+const opposingRightTurnYieldDistancePx = 130;
 const queueDetectionDistancePx = 14 * pxPerMeter;
 const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
+const sharedLaneConflictThresholdPx = 12;
 const crosswalkHalfSpanPx = 60;
 const crosswalkWidthPx = 28;
 const crosswalkInnerSetbackPx = 19;
@@ -54,7 +56,7 @@ const stopLineGapFromCrosswalkPx = 7;
 const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
 const stopLineThicknessPx = 6;
 const stopLineLengthPx = 44;
-const centerlineEndClearancePx = stopLineThicknessPx / 2 + 6;
+const centerlineEndClearancePx = stopLineThicknessPx / 2 + 18;
 const centerlineSetbackPx = roadHalfWidth + stopLineOffsetPx + centerlineEndClearancePx;
 const crosswalkStripeThicknessPx = 8;
 const pedBodyRadiusPx = 4.5;
@@ -267,8 +269,8 @@ const movementTargets = {
 const turnControlPoints = {
   west: {
     left: [
-      point(roadCenterX - 34, approaches.west.laneCenter),
-      point(roadCenterX + 30, roadCenterY + 30),
+      point(roadCenterX - 10, approaches.west.laneCenter),
+      point(roadCenterX + 30, roadCenterY + 18),
     ],
     right: [
       point(roadCenterX - 4, approaches.west.laneCenter),
@@ -277,8 +279,8 @@ const turnControlPoints = {
   },
   east: {
     left: [
-      point(roadCenterX + 34, approaches.east.laneCenter),
-      point(roadCenterX - 30, roadCenterY - 30),
+      point(roadCenterX + 10, approaches.east.laneCenter),
+      point(roadCenterX - 30, roadCenterY - 18),
     ],
     right: [
       point(roadCenterX + 4, approaches.east.laneCenter),
@@ -287,8 +289,8 @@ const turnControlPoints = {
   },
   north: {
     left: [
-      point(approaches.north.laneCenter, roadCenterY - 34),
-      point(roadCenterX - 30, roadCenterY + 30),
+      point(approaches.north.laneCenter, roadCenterY - 10),
+      point(roadCenterX - 18, roadCenterY + 30),
     ],
     right: [
       point(approaches.north.laneCenter, roadCenterY - 4),
@@ -297,8 +299,8 @@ const turnControlPoints = {
   },
   south: {
     left: [
-      point(approaches.south.laneCenter, roadCenterY + 34),
-      point(roadCenterX + 30, roadCenterY - 30),
+      point(approaches.south.laneCenter, roadCenterY + 10),
+      point(roadCenterX + 18, roadCenterY - 30),
     ],
     right: [
       point(approaches.south.laneCenter, roadCenterY + 4),
@@ -330,6 +332,7 @@ const sim = {
   signal: {
     state: "ew-green",
     elapsed: 0,
+    yellowLeftTurnClearance: {},
   },
   config: readConfig(),
 };
@@ -418,6 +421,7 @@ function resetSimulation() {
   sim.signal = {
     state: "ew-green",
     elapsed: 0,
+    yellowLeftTurnClearance: {},
   };
   sim.config = readConfig();
   sim.nextArrivalTimes = {};
@@ -595,6 +599,25 @@ function currentSignalDuration() {
   return sim.signal.state === "ew-green" ? sim.config.eastWestGreen : sim.config.northSouthGreen;
 }
 
+function clearYellowLeftTurnClearance() {
+  sim.signal.yellowLeftTurnClearance = {};
+}
+
+function captureYellowLeftTurnClearance(phaseGroup) {
+  clearYellowLeftTurnClearance();
+
+  for (const approach of approachList) {
+    if (approach.phaseGroup !== phaseGroup) {
+      continue;
+    }
+
+    const leadVehicle = getApproachQueue(approach.key)[0] || null;
+    if (leadVehicle && leadVehicle.movement === "left") {
+      sim.signal.yellowLeftTurnClearance[approach.key] = leadVehicle.id;
+    }
+  }
+}
+
 function isApproachVehicleGreen(approachKey) {
   if (sim.signal.state === "ew-green") {
     return approaches[approachKey].phaseGroup === "ew";
@@ -614,28 +637,44 @@ function updateSignal(dt) {
   sim.signal.elapsed = 0;
   switch (sim.signal.state) {
     case "ew-green":
+      captureYellowLeftTurnClearance("ew");
       sim.signal.state = "ew-yellow";
       break;
     case "ew-yellow":
+      clearYellowLeftTurnClearance();
       sim.signal.state = "ew-all-red";
       break;
     case "ew-all-red":
+      clearYellowLeftTurnClearance();
       sim.signal.state = "ns-green";
       break;
     case "ns-green":
+      captureYellowLeftTurnClearance("ns");
       sim.signal.state = "ns-yellow";
       break;
     case "ns-yellow":
+      clearYellowLeftTurnClearance();
       sim.signal.state = "ns-all-red";
       break;
     default:
+      clearYellowLeftTurnClearance();
       sim.signal.state = "ew-green";
       break;
   }
 }
 
 function isVehiclePermitted(vehicle) {
-  return isApproachVehicleGreen(vehicle.approach);
+  if (isApproachVehicleGreen(vehicle.approach)) {
+    return true;
+  }
+
+  if (!sim.signal.state.endsWith("yellow")) {
+    return false;
+  }
+
+  return vehicle.movement === "left" &&
+    approaches[vehicle.approach].phaseGroup === sim.signal.state.slice(0, 2) &&
+    sim.signal.yellowLeftTurnClearance[vehicle.approach] === vehicle.id;
 }
 
 function hasActiveCrosswalkPedestrian(approachKey) {
@@ -962,24 +1001,77 @@ function hasOpposingThroughConflict(vehicle) {
   });
 }
 
+function hasOpposingRightTurnConflict(vehicle) {
+  if (vehicle.movement !== "left") {
+    return false;
+  }
+
+  const conflictProfile = getLeftTurnOpposingRightConflictProfile(vehicle.approach);
+  if (!conflictProfile) {
+    return false;
+  }
+
+  const opposingKey = getOpposingApproachKey(vehicle.approach);
+  const opposingApproach = approaches[opposingKey];
+  const opposingLead = getApproachQueue(opposingKey)[0] || null;
+
+  return sim.vehicles.some((other) => {
+    if (other.id === vehicle.id || other.approach !== opposingKey || other.movement !== "right") {
+      return false;
+    }
+
+    if (other.state === "approach") {
+      if (!opposingLead || other.id !== opposingLead.id || !isVehiclePermitted(other)) {
+        return false;
+      }
+
+      const gapToStopPx = Math.abs(opposingApproach.stopCoord - other.coord) - (other.length * pxPerMeter) / 2;
+      return gapToStopPx <= opposingRightTurnYieldDistancePx;
+    }
+
+    if (other.state !== "intersection") {
+      return false;
+    }
+
+    const otherClearProgress = conflictProfile.opposingClearProgress + (other.length * pxPerMeter) / 2;
+    return other.progress <= otherClearProgress;
+  });
+}
+
 function moveVehicleIntoIntersection(vehicle) {
   vehicle.state = "intersection";
   vehicle.path = buildPath(vehicle);
   vehicle.pathLength = pathLength(vehicle.path);
   vehicle.progress = 0;
 
+  vehicle.yieldProgress = Number.NaN;
+  vehicle.clearProgress = Number.NaN;
+  vehicle.opposingRightTurnYieldProgress = Number.NaN;
+  vehicle.opposingRightTurnClearProgress = Number.NaN;
+
   if (vehicle.movement !== "left") {
     return;
   }
 
-  const conflictProfile = getLeftTurnConflictProfile(vehicle.approach);
-  if (!conflictProfile) {
-    return;
+  const throughConflictProfile = getLeftTurnConflictProfile(vehicle.approach);
+  const opposingRightConflictProfile = getLeftTurnOpposingRightConflictProfile(vehicle.approach);
+  const halfVehicleLengthPx = (vehicle.length * pxPerMeter) / 2;
+
+  if (throughConflictProfile) {
+    vehicle.yieldProgress = Math.max(0, throughConflictProfile.yieldProgress - halfVehicleLengthPx);
+    vehicle.clearProgress = Math.min(vehicle.pathLength, throughConflictProfile.clearProgress + halfVehicleLengthPx);
   }
 
-  const halfVehicleLengthPx = (vehicle.length * pxPerMeter) / 2;
-  vehicle.yieldProgress = Math.max(0, conflictProfile.yieldProgress - halfVehicleLengthPx);
-  vehicle.clearProgress = Math.min(vehicle.pathLength, conflictProfile.clearProgress + halfVehicleLengthPx);
+  if (opposingRightConflictProfile) {
+    vehicle.opposingRightTurnYieldProgress = Math.max(
+      0,
+      opposingRightConflictProfile.yieldProgress - halfVehicleLengthPx,
+    );
+    vehicle.opposingRightTurnClearProgress = Math.min(
+      vehicle.pathLength,
+      opposingRightConflictProfile.clearProgress + halfVehicleLengthPx,
+    );
+  }
 }
 
 function buildPath(vehicle) {
@@ -1082,6 +1174,45 @@ function findPathDistanceToLine(points, axis, value) {
 }
 
 const leftTurnConflictProfiles = {};
+const leftTurnOpposingRightConflictProfiles = {};
+
+function findPathConflictProgress(points, otherPoints, thresholdPx) {
+  if (!points || !otherPoints || points.length < 2 || otherPoints.length < 2) {
+    return null;
+  }
+
+  let cumulativeDistance = 0;
+  const samplesPerSegment = 4;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const start = points[i - 1];
+    const end = points[i];
+    const segmentLength = distanceBetween(start, end);
+    const startStep = i === 1 ? 0 : 1;
+
+    for (let step = startStep; step <= samplesPerSegment; step += 1) {
+      const ratio = step / samplesPerSegment;
+      const samplePoint = point(
+        start.x + (end.x - start.x) * ratio,
+        start.y + (end.y - start.y) * ratio,
+      );
+      const closest = findClosestPathPoint(otherPoints, samplePoint);
+
+      if (closest && closest.distance <= thresholdPx) {
+        return {
+          progress: cumulativeDistance + segmentLength * ratio,
+          point: samplePoint,
+          otherProgress: closest.progress,
+          otherPoint: closest.point,
+        };
+      }
+    }
+
+    cumulativeDistance += segmentLength;
+  }
+
+  return null;
+}
 
 function getLeftTurnConflictProfile(approachKey) {
   if (Object.prototype.hasOwnProperty.call(leftTurnConflictProfiles, approachKey)) {
@@ -1109,6 +1240,37 @@ function getLeftTurnConflictProfile(approachKey) {
   };
 
   return leftTurnConflictProfiles[approachKey];
+}
+
+function getLeftTurnOpposingRightConflictProfile(approachKey) {
+  if (Object.prototype.hasOwnProperty.call(leftTurnOpposingRightConflictProfiles, approachKey)) {
+    return leftTurnOpposingRightConflictProfiles[approachKey];
+  }
+
+  const opposingKey = getOpposingApproachKey(approachKey);
+  const leftTurnPath = buildPath({ approach: approachKey, movement: "left" });
+  const opposingRightTurnPath = buildPath({ approach: opposingKey, movement: "right" });
+  const conflictLocation = findPathConflictProgress(
+    leftTurnPath,
+    opposingRightTurnPath,
+    sharedLaneConflictThresholdPx,
+  );
+
+  if (!conflictLocation) {
+    leftTurnOpposingRightConflictProfiles[approachKey] = null;
+    return null;
+  }
+
+  leftTurnOpposingRightConflictProfiles[approachKey] = {
+    yieldProgress: Math.max(0, conflictLocation.progress - leftTurnYieldBufferPx),
+    clearProgress: Math.min(pathLength(leftTurnPath), conflictLocation.progress + leftTurnYieldBufferPx),
+    opposingClearProgress: Math.min(
+      pathLength(opposingRightTurnPath),
+      conflictLocation.otherProgress + leftTurnYieldBufferPx,
+    ),
+  };
+
+  return leftTurnOpposingRightConflictProfiles[approachKey];
 }
 
 function getVehicleAxisCoord(vehicle) {
@@ -1266,6 +1428,17 @@ function updateApproachVehicles(dt) {
         }
       }
 
+      if (hasOpposingRightTurnConflict(vehicle)) {
+        const yieldGap = Math.abs(approach.stopCoord - vehicle.coord) - (vehicle.length * pxPerMeter) / 2;
+        const conflictLeader = {
+          gap: Math.max(0.5, yieldGap / pxPerMeter),
+          speed: 0,
+        };
+        if (!leadObject || conflictLeader.gap < leadObject.gap) {
+          leadObject = conflictLeader;
+        }
+      }
+
       vehicle.a = idmAcceleration(vehicle, leadObject);
     }
 
@@ -1300,6 +1473,7 @@ function updateApproachVehicles(dt) {
         isVehiclePermitted(vehicle) &&
         !hasActiveCrosswalkPedestrian(approach.key) &&
         !hasOpposingThroughConflict(vehicle) &&
+        !hasOpposingRightTurnConflict(vehicle) &&
         (
           (approach.travelSign > 0 && vehicle.coord >= approach.stopCoord + 1) ||
           (approach.travelSign < 0 && vehicle.coord <= approach.stopCoord - 1)
@@ -1318,17 +1492,28 @@ function updateIntersectionVehicles(dt) {
   const routeGroups = new Map();
 
   for (const vehicle of active) {
-    const leftTurnYieldActive =
+    const opposingThroughYieldActive =
       vehicle.movement === "left" &&
       Number.isFinite(vehicle.yieldProgress) &&
       vehicle.progress <= vehicle.yieldProgress + 0.5 &&
       hasOpposingThroughConflict(vehicle);
+    const opposingRightTurnYieldActive =
+      vehicle.movement === "left" &&
+      Number.isFinite(vehicle.opposingRightTurnYieldProgress) &&
+      vehicle.progress <= vehicle.opposingRightTurnYieldProgress + 0.5 &&
+      hasOpposingRightTurnConflict(vehicle);
     const pedestrianConflict = getNearestPedestrianConflict(vehicle);
-    const shouldYieldInIntersection = leftTurnYieldActive || Boolean(pedestrianConflict);
+    const shouldYieldInIntersection =
+      opposingThroughYieldActive ||
+      opposingRightTurnYieldActive ||
+      Boolean(pedestrianConflict);
     let maxProgress = Number.POSITIVE_INFINITY;
 
-    if (leftTurnYieldActive) {
+    if (opposingThroughYieldActive) {
       maxProgress = Math.min(maxProgress, vehicle.yieldProgress);
+    }
+    if (opposingRightTurnYieldActive) {
+      maxProgress = Math.min(maxProgress, vehicle.opposingRightTurnYieldProgress);
     }
     if (pedestrianConflict) {
       maxProgress = Math.min(maxProgress, pedestrianConflict.stopProgress);
@@ -1361,30 +1546,7 @@ function updateIntersectionVehicles(dt) {
 
   for (const vehicle of active) {
     const sample = samplePath(vehicle.path, vehicle.progress);
-    let { position } = sample;
-
-    // Prevent left-turners from cutting across the centerline/double-yellow during
-    // the early/yielding portion of the maneuver.
-    if (
-      vehicle.movement === "left" &&
-      Number.isFinite(vehicle.yieldProgress) &&
-      vehicle.progress <= vehicle.yieldProgress
-    ) {
-      const centerMarginPx = 6;
-      if (vehicle.approach === "west") {
-        // West approach lane is below the horizontal centerline.
-        position.y = Math.max(position.y, roadCenterY + centerMarginPx);
-      } else if (vehicle.approach === "east") {
-        // East approach lane is above the horizontal centerline.
-        position.y = Math.min(position.y, roadCenterY - centerMarginPx);
-      } else if (vehicle.approach === "north") {
-        // North approach lane is left of the vertical centerline.
-        position.x = Math.min(position.x, roadCenterX - centerMarginPx);
-      } else if (vehicle.approach === "south") {
-        // South approach lane is right of the vertical centerline.
-        position.x = Math.max(position.x, roadCenterX + centerMarginPx);
-      }
-    }
+    const { position } = sample;
 
     vehicle.position = position;
     vehicle.angle = sample.angle;
