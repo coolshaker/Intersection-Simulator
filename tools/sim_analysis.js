@@ -17,23 +17,40 @@ const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
 const sharedLaneConflictThresholdPx = 12;
+const crosswalkHalfSpanPx = 60;
 const crosswalkWidthPx = 36;
 const crosswalkInnerSetbackPx = 19;
 const crosswalkOffsetPx = crosswalkInnerSetbackPx + crosswalkWidthPx / 2;
 const stopLineGapFromCrosswalkPx = 12;
 const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
-const defaultMovementRatios = {
-  left: 0.23,
-  through: 0.53,
-  right: 0.24,
-};
-
+const pedBodyRadiusPx = 4.5;
+const pedestrianPathConflictThresholdPx = 16;
+const pedestrianYieldBufferPx = 12;
+const pedestrianStartDelayMinS = 0.25;
+const pedestrianStartDelayMaxS = 1.1;
+const pedestrianAccelerationMps2 = 0.9;
+const pedestrianEndSlowdownDistancePx = 18;
+const pedestrianComfortGapPx = 26;
+const pedestrianLeadVehicleSpeedThresholdMps = 1.8;
+const pedestrianLateralOffsetPx = 4.5;
+const pedestrianLaneOffsetsPx = [-9, 0, 9];
+const pedestrianSpawnSpacingPx = 24;
+const pedestrianVehicleClearancePx = 2.5;
+const pedestrianMaxDodgeOffsetPx = 8;
+const pedestrianStoppedVehicleDodgeOffsetPx = 16;
+const pedestrianDodgeRatePxPerSecond = 28;
+const pedestrianStoppedVehicleSpeedThresholdMps = 0.15;
+const pedestrianLargeVehicleBypassMarginPx = 6;
 function point(x, y) {
   return { x, y };
 }
 
 function distanceBetween(a, b) {
   return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function distancePointToSegment(target, start, end) {
@@ -64,6 +81,25 @@ function getFollowingGapPx(approach, leaderCoord, leaderLength, followerCoord, f
   const leaderRearCoord = leaderCoord - approach.travelSign * (leaderLength * pxPerMeter) / 2;
   const followerFrontCoord = followerCoord + approach.travelSign * (followerLength * pxPerMeter) / 2;
   return (leaderRearCoord - followerFrontCoord) * approach.travelSign;
+}
+
+function normalizeVector(dx, dy) {
+  const magnitude = Math.hypot(dx, dy);
+  if (magnitude < 1e-6) {
+    return { x: 0, y: 0 };
+  }
+  return { x: dx / magnitude, y: dy / magnitude };
+}
+
+function moveToward(current, target, maxDelta) {
+  if (Math.abs(target - current) <= maxDelta) {
+    return target;
+  }
+  return current + Math.sign(target - current) * maxDelta;
+}
+
+function isVehicleStoppedForPedestrian(vehicle) {
+  return Math.abs(vehicle.v) <= pedestrianStoppedVehicleSpeedThresholdMps;
 }
 
 function createRng(seed) {
@@ -129,6 +165,24 @@ const approaches = {
 };
 
 const approachList = Object.values(approaches);
+const crosswalks = {
+  west: {
+    start: point(roadCenterX - roadHalfWidth - crosswalkOffsetPx, roadCenterY - crosswalkHalfSpanPx),
+    end: point(roadCenterX - roadHalfWidth - crosswalkOffsetPx, roadCenterY + crosswalkHalfSpanPx),
+  },
+  east: {
+    start: point(roadCenterX + roadHalfWidth + crosswalkOffsetPx, roadCenterY + crosswalkHalfSpanPx),
+    end: point(roadCenterX + roadHalfWidth + crosswalkOffsetPx, roadCenterY - crosswalkHalfSpanPx),
+  },
+  north: {
+    start: point(roadCenterX + crosswalkHalfSpanPx, roadCenterY - roadHalfWidth - crosswalkOffsetPx),
+    end: point(roadCenterX - crosswalkHalfSpanPx, roadCenterY - roadHalfWidth - crosswalkOffsetPx),
+  },
+  south: {
+    start: point(roadCenterX - crosswalkHalfSpanPx, roadCenterY + roadHalfWidth + crosswalkOffsetPx),
+    end: point(roadCenterX + crosswalkHalfSpanPx, roadCenterY + roadHalfWidth + crosswalkOffsetPx),
+  },
+};
 
 const movementTargets = {
   west: {
@@ -396,8 +450,12 @@ function createSimulation(config, seed) {
     rng,
     time: 0,
     vehicles: [],
+    pedestrians: [],
     nextVehicleId: 1,
+    nextPedestrianId: 1,
     nextArrivalTimes: {},
+    nextPedArrivalTimes: {},
+    pendingPedRequests: {},
     stats: {
       spawned: 0,
       completedTrips: 0,
@@ -424,7 +482,20 @@ function createSimulation(config, seed) {
     sim.nextArrivalTimes[approachKey] = sim.time + sampleExponential(ratePerSecond, sim.rng);
   }
 
+  function scheduleNextPedArrival(approachKey) {
+    const ratePerHour = sim.config.pedestrianTotalRatePerHour / approachList.length;
+    const ratePerSecond = ratePerHour / 3600;
+    if (ratePerSecond <= 0) {
+      sim.nextPedArrivalTimes[approachKey] = Number.POSITIVE_INFINITY;
+      return;
+    }
+    sim.nextPedArrivalTimes[approachKey] = sim.time + sampleExponential(ratePerSecond, sim.rng);
+  }
+
   function currentSignalDuration() {
+    if (sim.signal.state.endsWith("all-red")) {
+      return sim.config.allRed;
+    }
     if (sim.signal.state.endsWith("yellow")) {
       return sim.config.yellow;
     }
@@ -433,11 +504,8 @@ function createSimulation(config, seed) {
 
   function pickMovement() {
     const leftTurnRatio = sim.config.leftTurnRatio;
-    const remainingRatio = Math.max(0, 1 - leftTurnRatio);
-    const nonLeftDefaultTotal = defaultMovementRatios.through + defaultMovementRatios.right;
-    const throughRatio = nonLeftDefaultTotal > 0
-      ? remainingRatio * (defaultMovementRatios.through / nonLeftDefaultTotal)
-      : remainingRatio;
+    const rightTurnRatio = Math.min(sim.config.rightTurnRatio, Math.max(0, 1 - leftTurnRatio));
+    const throughRatio = Math.max(0, 1 - leftTurnRatio - rightTurnRatio);
     const roll = sim.rng();
     if (roll < leftTurnRatio) {
       return "left";
@@ -552,11 +620,19 @@ function createSimulation(config, seed) {
         break;
       case "ew-yellow":
         clearYellowLeftTurnClearance();
+        sim.signal.state = "ew-all-red";
+        break;
+      case "ew-all-red":
+        clearYellowLeftTurnClearance();
         sim.signal.state = "ns-green";
         break;
       case "ns-green":
         captureYellowLeftTurnClearance("ns");
         sim.signal.state = "ns-yellow";
+        break;
+      case "ns-yellow":
+        clearYellowLeftTurnClearance();
+        sim.signal.state = "ns-all-red";
         break;
       default:
         clearYellowLeftTurnClearance();
@@ -565,12 +641,19 @@ function createSimulation(config, seed) {
     }
   }
 
-  function isVehiclePermitted(vehicle) {
+  function isApproachVehicleGreen(approachKey) {
     if (sim.signal.state === "ew-green") {
-      return approaches[vehicle.approach].phaseGroup === "ew";
+      return approaches[approachKey].phaseGroup === "ew";
     }
     if (sim.signal.state === "ns-green") {
-      return approaches[vehicle.approach].phaseGroup === "ns";
+      return approaches[approachKey].phaseGroup === "ns";
+    }
+    return false;
+  }
+
+  function isVehiclePermitted(vehicle) {
+    if (isApproachVehicleGreen(vehicle.approach)) {
+      return true;
     }
     if (!sim.signal.state.endsWith("yellow")) {
       return false;
@@ -598,6 +681,298 @@ function createSimulation(config, seed) {
         sim.signal.yellowLeftTurnClearance[approach.key] = leadVehicle.id;
       }
     }
+  }
+
+  function hasActiveCrosswalkPedestrian(approachKey) {
+    return sim.pedestrians.some((pedestrian) => pedestrian.approach === approachKey);
+  }
+
+  function getCrosswalkPedestrians(approachKey) {
+    return sim.pedestrians.filter((pedestrian) => pedestrian.approach === approachKey);
+  }
+
+  function isPedestrianEntryComfortable(approachKey) {
+    const queue = getApproachQueue(approachKey);
+    const leadVehicle = queue[0];
+    if (!leadVehicle) {
+      return true;
+    }
+
+    const approach = approaches[approachKey];
+    const gapToStopPx = Math.abs(approach.stopCoord - leadVehicle.coord) - (leadVehicle.length * pxPerMeter) / 2;
+    if (gapToStopPx > pedestrianComfortGapPx) {
+      return true;
+    }
+
+    return !isVehiclePermitted(leadVehicle) && leadVehicle.v <= pedestrianLeadVehicleSpeedThresholdMps;
+  }
+
+  function getAvailablePedestrianLaneOffset(approachKey) {
+    const crosswalkPedestrians = getCrosswalkPedestrians(approachKey);
+
+    for (const laneOffsetPx of pedestrianLaneOffsetsPx) {
+      const laneOccupiedNearEntry = crosswalkPedestrians.some((pedestrian) => (
+        Math.abs((pedestrian.laneOffsetPx ?? pedestrian.lateralOffsetPx ?? 0) - laneOffsetPx) < 2 &&
+        pedestrian.progress < pedestrianSpawnSpacingPx
+      ));
+
+      if (!laneOccupiedNearEntry) {
+        return laneOffsetPx;
+      }
+    }
+
+    return null;
+  }
+
+  function createPedestrian(approachKey, laneOffsetPx = 0) {
+    const crosswalk = crosswalks[approachKey];
+    const direction = normalizeVector(crosswalk.end.x - crosswalk.start.x, crosswalk.end.y - crosswalk.start.y);
+    const normal = point(-direction.y, direction.x);
+    const baseOffsetPx = laneOffsetPx + (sim.rng() * 2 - 1) * pedestrianLateralOffsetPx * 0.35;
+    const start = point(
+      crosswalk.start.x + normal.x * baseOffsetPx,
+      crosswalk.start.y + normal.y * baseOffsetPx,
+    );
+    const end = point(
+      crosswalk.end.x + normal.x * baseOffsetPx,
+      crosswalk.end.y + normal.y * baseOffsetPx,
+    );
+    const lengthPx = distanceBetween(start, end);
+    const desiredSpeedMps = 0.95 + sim.rng() * 0.65;
+    const bodyRadiusPx = pedBodyRadiusPx * (0.9 + sim.rng() * 0.22);
+    const startDelayS = pedestrianStartDelayMinS +
+      sim.rng() * (pedestrianStartDelayMaxS - pedestrianStartDelayMinS);
+
+    return {
+      id: sim.nextPedestrianId++,
+      approach: approachKey,
+      progress: 0,
+      speedMps: 0,
+      desiredSpeedMps,
+      bodyRadiusPx,
+      laneOffsetPx,
+      lateralOffsetPx: baseOffsetPx,
+      startDelayS,
+      start,
+      end,
+      lengthPx,
+      position: start,
+      heading: direction,
+      normal,
+      dodgeOffsetPx: 0,
+      dodgeTargetOffsetPx: 0,
+      blockingVehicleId: null,
+    };
+  }
+
+  function maybeSpawnPedestrians() {
+    for (const approach of approachList) {
+      while (sim.time >= sim.nextPedArrivalTimes[approach.key]) {
+        sim.pendingPedRequests[approach.key] += 1;
+        scheduleNextPedArrival(approach.key);
+      }
+
+      const canStartCrossing =
+        !isApproachVehicleGreen(approach.key) &&
+        isPedestrianEntryComfortable(approach.key);
+
+      while (sim.pendingPedRequests[approach.key] > 0 && canStartCrossing) {
+        const laneOffsetPx = getAvailablePedestrianLaneOffset(approach.key);
+        if (laneOffsetPx === null) {
+          break;
+        }
+        sim.pedestrians.push(createPedestrian(approach.key, laneOffsetPx));
+        sim.pendingPedRequests[approach.key] -= 1;
+      }
+    }
+  }
+
+  function getPedestrianPositionAtProgress(pedestrian, progress, dodgeOffsetPx = pedestrian.dodgeOffsetPx || 0) {
+    const ratio = Math.min(1, Math.max(0, progress / Math.max(1, pedestrian.lengthPx)));
+    return point(
+      pedestrian.start.x + (pedestrian.end.x - pedestrian.start.x) * ratio + pedestrian.normal.x * dodgeOffsetPx,
+      pedestrian.start.y + (pedestrian.end.y - pedestrian.start.y) * ratio + pedestrian.normal.y * dodgeOffsetPx,
+    );
+  }
+
+  function getBlockingVehicleForPedestrian(pedestrian, position) {
+    const bodyRadius = pedestrian.bodyRadiusPx || pedBodyRadiusPx;
+
+    for (const vehicle of sim.vehicles) {
+      const dx = position.x - vehicle.position.x;
+      const dy = position.y - vehicle.position.y;
+      const cos = Math.cos(vehicle.angle);
+      const sin = Math.sin(vehicle.angle);
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      const halfLengthPx = (vehicle.length * pxPerMeter) / 2 + bodyRadius + pedestrianVehicleClearancePx;
+      const halfWidthPx = (vehicle.width * pxPerMeter) / 2 + bodyRadius + pedestrianVehicleClearancePx;
+
+      if (Math.abs(localX) <= halfLengthPx && Math.abs(localY) <= halfWidthPx) {
+        return vehicle;
+      }
+    }
+
+    return null;
+  }
+
+  function getPedestrianDodgeCandidates(pedestrian, blocker) {
+    const bodyRadius = pedestrian.bodyRadiusPx || pedBodyRadiusPx;
+    const side = ((blocker.position.x - pedestrian.position.x) * pedestrian.normal.x) +
+      ((blocker.position.y - pedestrian.position.y) * pedestrian.normal.y);
+    const preferredSign = side >= 0 ? -1 : 1;
+    const maxDodgeOffset = isVehicleStoppedForPedestrian(blocker)
+      ? pedestrianStoppedVehicleDodgeOffsetPx
+      : pedestrianMaxDodgeOffsetPx;
+    const blockerHalfExtents = getVehicleCanvasHalfExtents(blocker);
+    const blockerNormalExtentPx = Math.abs(pedestrian.normal.x) > Math.abs(pedestrian.normal.y)
+      ? blockerHalfExtents.x
+      : blockerHalfExtents.y;
+    const basePathPosition = getPedestrianPositionAtProgress(pedestrian, pedestrian.progress, 0);
+    const blockerCenterOffsetPx =
+      ((blocker.position.x - basePathPosition.x) * pedestrian.normal.x) +
+      ((blocker.position.y - basePathPosition.y) * pedestrian.normal.y);
+    const requiredBypassOffsetPx =
+      Math.abs(blockerCenterOffsetPx) +
+      blockerNormalExtentPx +
+      bodyRadius +
+      pedestrianVehicleClearancePx +
+      pedestrianLargeVehicleBypassMarginPx;
+    const stoppedVehicleBypassOffsetPx = isVehicleStoppedForPedestrian(blocker)
+      ? Math.max(maxDodgeOffset, requiredBypassOffsetPx)
+      : maxDodgeOffset;
+    const offsets = [
+      0,
+      pedestrian.dodgeOffsetPx || 0,
+      preferredSign * (maxDodgeOffset * 0.5),
+      preferredSign * maxDodgeOffset,
+      -preferredSign * (maxDodgeOffset * 0.5),
+      -preferredSign * maxDodgeOffset,
+      preferredSign * stoppedVehicleBypassOffsetPx,
+      -preferredSign * stoppedVehicleBypassOffsetPx,
+    ];
+
+    return offsets
+      .map((offset) => clamp(offset, -stoppedVehicleBypassOffsetPx, stoppedVehicleBypassOffsetPx))
+      .filter((offset, index, array) => array.findIndex((value) => Math.abs(value - offset) < 0.01) === index);
+  }
+
+  function updatePedestrians(dt) {
+    const remaining = [];
+
+    for (const pedestrian of sim.pedestrians) {
+      if (pedestrian.startDelayS > 0) {
+        pedestrian.startDelayS = Math.max(0, pedestrian.startDelayS - dt);
+      }
+
+      let targetSpeedMps = pedestrian.startDelayS > 0 ? 0 : pedestrian.desiredSpeedMps;
+      const remainingDistancePx = Math.max(0, pedestrian.lengthPx - pedestrian.progress);
+      if (remainingDistancePx < pedestrianEndSlowdownDistancePx) {
+        const slowdownRatio = clamp(remainingDistancePx / pedestrianEndSlowdownDistancePx, 0.35, 1);
+        targetSpeedMps *= slowdownRatio;
+      }
+
+      const speedDeltaLimit = pedestrianAccelerationMps2 * dt;
+      if (pedestrian.speedMps < targetSpeedMps) {
+        pedestrian.speedMps = Math.min(targetSpeedMps, pedestrian.speedMps + speedDeltaLimit);
+      } else {
+        pedestrian.speedMps = Math.max(targetSpeedMps, pedestrian.speedMps - speedDeltaLimit * 1.2);
+      }
+
+      const currentProgress = pedestrian.progress;
+      const currentPosition = getPedestrianPositionAtProgress(pedestrian, currentProgress);
+      const desiredProgress = Math.min(
+        pedestrian.lengthPx,
+        currentProgress + pedestrian.speedMps * pxPerMeter * dt,
+      );
+
+      let chosenProgress = desiredProgress;
+      let chosenDodgeTarget = 0;
+      let blocker = getBlockingVehicleForPedestrian(
+        pedestrian,
+        getPedestrianPositionAtProgress(pedestrian, desiredProgress, 0),
+      );
+
+      if (blocker) {
+        const dodgeCandidates = getPedestrianDodgeCandidates(pedestrian, blocker);
+        const forwardDodge = dodgeCandidates.find((offset) => (
+          !getBlockingVehicleForPedestrian(
+            pedestrian,
+            getPedestrianPositionAtProgress(pedestrian, desiredProgress, offset),
+          )
+        ));
+
+        if (typeof forwardDodge === "number") {
+          chosenDodgeTarget = forwardDodge;
+        } else {
+          chosenProgress = currentProgress;
+          const lateralDodge = dodgeCandidates.find((offset) => (
+            !getBlockingVehicleForPedestrian(
+              pedestrian,
+              getPedestrianPositionAtProgress(pedestrian, currentProgress, offset),
+            )
+          ));
+          if (typeof lateralDodge === "number") {
+            chosenDodgeTarget = lateralDodge;
+          } else {
+            chosenDodgeTarget = pedestrian.dodgeOffsetPx || 0;
+            pedestrian.speedMps = 0;
+          }
+        }
+      }
+      pedestrian.blockingVehicleId = blocker ? blocker.id : null;
+
+      const relaxedCenterlinePosition = getPedestrianPositionAtProgress(pedestrian, desiredProgress, 0);
+      if (!blocker && !getBlockingVehicleForPedestrian(pedestrian, relaxedCenterlinePosition)) {
+        chosenDodgeTarget = 0;
+      }
+
+      pedestrian.dodgeTargetOffsetPx = chosenDodgeTarget;
+      let nextDodgeOffset;
+      if (blocker && isVehicleStoppedForPedestrian(blocker)) {
+        nextDodgeOffset = pedestrian.dodgeTargetOffsetPx;
+      } else if (
+        chosenProgress === currentProgress &&
+        Math.abs((pedestrian.dodgeOffsetPx || 0) - pedestrian.dodgeTargetOffsetPx) > 0.01
+      ) {
+        nextDodgeOffset = pedestrian.dodgeTargetOffsetPx;
+      } else {
+        nextDodgeOffset = moveToward(
+          pedestrian.dodgeOffsetPx || 0,
+          pedestrian.dodgeTargetOffsetPx,
+          pedestrianDodgeRatePxPerSecond * dt,
+        );
+      }
+
+      let nextPosition = getPedestrianPositionAtProgress(pedestrian, chosenProgress, nextDodgeOffset);
+      const nextBlocker = getBlockingVehicleForPedestrian(pedestrian, nextPosition);
+      if (nextBlocker) {
+        chosenProgress = currentProgress;
+        nextPosition = currentPosition;
+        pedestrian.speedMps = 0;
+      } else {
+        pedestrian.dodgeOffsetPx = nextDodgeOffset;
+        pedestrian.progress = chosenProgress;
+      }
+
+      pedestrian.position = nextPosition;
+      const ratio = Math.min(1, pedestrian.progress / Math.max(1, pedestrian.lengthPx));
+      if (ratio < 1) {
+        remaining.push(pedestrian);
+      }
+    }
+
+    sim.pedestrians = remaining;
+  }
+
+  function getVehicleCanvasHalfExtents(vehicle) {
+    const halfLengthPx = (vehicle.length * pxPerMeter) / 2;
+    const halfWidthPx = (vehicle.width * pxPerMeter) / 2;
+
+    return {
+      x: Math.abs(Math.cos(vehicle.angle)) * halfLengthPx + Math.abs(Math.sin(vehicle.angle)) * halfWidthPx,
+      y: Math.abs(Math.sin(vehicle.angle)) * halfLengthPx + Math.abs(Math.cos(vehicle.angle)) * halfWidthPx,
+    };
   }
 
   function getLeftTurnConflictProfile(approachKey) {
@@ -707,6 +1082,41 @@ function createSimulation(config, seed) {
   function getThroughDistanceToConflict(vehicle, conflictCoord) {
     const approach = approaches[vehicle.approach];
     return (conflictCoord - getVehicleAxisCoord(vehicle)) * approach.travelSign;
+  }
+
+  function getNearestPedestrianConflict(vehicle) {
+    if (vehicle.state !== "intersection" || !vehicle.path) {
+      return null;
+    }
+
+    let nearestConflict = null;
+    const halfVehicleLengthPx = (vehicle.length * pxPerMeter) / 2;
+
+    for (const pedestrian of sim.pedestrians) {
+      if (pedestrian.blockingVehicleId === vehicle.id) {
+        continue;
+      }
+
+      const closest = findClosestPathPoint(vehicle.path, pedestrian.position);
+      if (!closest || closest.distance > pedestrianPathConflictThresholdPx) {
+        continue;
+      }
+
+      const distanceAheadPx = closest.progress - vehicle.progress;
+      if (distanceAheadPx < -halfVehicleLengthPx) {
+        continue;
+      }
+
+      const stopProgress = Math.max(vehicle.progress, closest.progress - halfVehicleLengthPx - pedestrianYieldBufferPx);
+      if (!nearestConflict || stopProgress < nearestConflict.stopProgress) {
+        nearestConflict = {
+          pedestrian,
+          stopProgress,
+        };
+      }
+    }
+
+    return nearestConflict;
   }
 
   function hasOpposingThroughConflict(vehicle) {
@@ -862,7 +1272,7 @@ function createSimulation(config, seed) {
           }
         }
 
-        if (!isVehiclePermitted(vehicle)) {
+        if (!isVehiclePermitted(vehicle) || hasActiveCrosswalkPedestrian(approach.key)) {
           const stopGap = Math.abs(approach.stopCoord - vehicle.coord) - (vehicle.length * pxPerMeter) / 2;
           const signalLeader = {
             gap: Math.max(0.5, stopGap / pxPerMeter),
@@ -926,6 +1336,7 @@ function createSimulation(config, seed) {
 
         const canEnter =
           isVehiclePermitted(vehicle) &&
+          !hasActiveCrosswalkPedestrian(approach.key) &&
           !hasOpposingThroughConflict(vehicle) &&
           !hasOpposingRightTurnConflict(vehicle) &&
           (
@@ -956,19 +1367,27 @@ function createSimulation(config, seed) {
         Number.isFinite(vehicle.opposingRightTurnYieldProgress) &&
         vehicle.progress <= vehicle.opposingRightTurnYieldProgress + 0.5 &&
         hasOpposingRightTurnConflict(vehicle);
-
-      if (opposingThroughYieldActive || opposingRightTurnYieldActive) {
-        vehicle.v = Math.max(0, vehicle.v - 3.6 * dt);
-      } else {
-        vehicle.v = Math.min(vehicle.desiredSpeed, Math.max(vehicle.desiredSpeed * 0.65, vehicle.v + 1.4 * dt));
-      }
-
+      const pedestrianConflict = getNearestPedestrianConflict(vehicle);
+      const shouldYieldInIntersection =
+        opposingThroughYieldActive ||
+        opposingRightTurnYieldActive ||
+        Boolean(pedestrianConflict);
       let maxProgress = Number.POSITIVE_INFINITY;
+
       if (opposingThroughYieldActive) {
         maxProgress = Math.min(maxProgress, vehicle.yieldProgress);
       }
       if (opposingRightTurnYieldActive) {
         maxProgress = Math.min(maxProgress, vehicle.opposingRightTurnYieldProgress);
+      }
+      if (pedestrianConflict) {
+        maxProgress = Math.min(maxProgress, pedestrianConflict.stopProgress);
+      }
+
+      if (shouldYieldInIntersection) {
+        vehicle.v = Math.max(0, vehicle.v - 3.6 * dt);
+      } else {
+        vehicle.v = Math.min(vehicle.desiredSpeed, Math.max(vehicle.desiredSpeed * 0.65, vehicle.v + 1.4 * dt));
       }
       vehicle.progress = Math.min(vehicle.progress + vehicle.v * pxPerMeter * dt, maxProgress);
 
@@ -1012,6 +1431,7 @@ function createSimulation(config, seed) {
   function updateVehicles(dt) {
     updateApproachVehicles(dt);
     updateIntersectionVehicles(dt);
+    updatePedestrians(dt);
 
     const queueCount = getTotalRealTimeQueueCount();
     sim.stats.currentQueue = queueCount;
@@ -1023,10 +1443,15 @@ function createSimulation(config, seed) {
     sim.time += dt;
     updateSignal(dt);
     maybeSpawnVehicles();
+    maybeSpawnPedestrians();
     updateVehicles(dt);
   }
 
-  approachList.forEach((approach) => scheduleNextArrival(approach.key));
+  approachList.forEach((approach) => {
+    scheduleNextArrival(approach.key);
+    scheduleNextPedArrival(approach.key);
+    sim.pendingPedRequests[approach.key] = 0;
+  });
 
   return {
     sim,
@@ -1077,9 +1502,11 @@ function summarizeScenario(scenario) {
     timing: {
       eastWestGreen: scenario.config.eastWestGreen,
       yellow: scenario.config.yellow,
+      allRed: scenario.config.allRed,
       northSouthGreen: scenario.config.northSouthGreen,
     },
     demandVehPerHour: scenario.config.arrivalRatePerHour,
+    pedestrianTotalRatePerHour: scenario.config.pedestrianTotalRatePerHour,
     replications: scenario.replications,
     durationSeconds: scenario.durationSeconds,
     meanAvgDelaySeconds: round(mean(replications.map((item) => item.avgDelaySeconds))),
@@ -1093,72 +1520,159 @@ function summarizeScenario(scenario) {
 
 const scenarios = [
   {
-    id: "baseline-balanced",
-    title: "Scenario A: Balanced Demand",
-    description: "Baseline 30-5-30 timing with equal demand on all four approaches.",
+    id: "S1",
+    title: "Baseline Default Settings",
+    description: "Default browser settings with balanced approach demand and baseline pedestrian activity.",
     replications: 10,
     durationSeconds: 1200,
     dtSeconds: 0.1,
     seedBase: 1000,
     config: {
       eastWestGreen: 30,
-      yellow: 5,
+      yellow: 3,
+      allRed: 2,
       northSouthGreen: 30,
       arrivalRatePerHour: {
-        west: 500,
-        east: 500,
-        north: 500,
-        south: 500,
+        west: 300,
+        east: 300,
+        north: 300,
+        south: 300,
       },
+      pedestrianTotalRatePerHour: 100,
       desiredSpeedMps: 30 * 0.44704,
-      leftTurnRatio: 0.15,
-      largeVehicleRatio: 0.10,
+      leftTurnRatio: 0.05,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.05,
     },
   },
   {
-    id: "heavy-ew-base",
-    title: "Scenario B: East-West Heavy Demand",
-    description: "Base timing retained, but east-west approaches carry heavier demand than north-south.",
+    id: "S2",
+    title: "Higher Left-Turn Activity",
+    description: "Balanced demand with a higher left-turn share to emphasize permissive turning effects.",
     replications: 10,
     durationSeconds: 1200,
     dtSeconds: 0.1,
     seedBase: 2000,
     config: {
       eastWestGreen: 30,
-      yellow: 5,
+      yellow: 3,
+      allRed: 2,
       northSouthGreen: 30,
       arrivalRatePerHour: {
-        west: 750,
-        east: 750,
-        north: 350,
-        south: 350,
+        west: 300,
+        east: 300,
+        north: 300,
+        south: 300,
       },
+      pedestrianTotalRatePerHour: 100,
       desiredSpeedMps: 30 * 0.44704,
-      leftTurnRatio: 0.15,
-      largeVehicleRatio: 0.10,
+      leftTurnRatio: 0.30,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.05,
     },
   },
   {
-    id: "heavy-ew-retimed",
-    title: "Scenario C: East-West Heavy Demand With Retiming",
-    description: "East-west heavy demand with a reallocated split of 40-5-20 to test timing responsiveness.",
+    id: "S3",
+    title: "Higher Truck Proportion",
+    description: "Balanced demand with a larger share of heavy vehicles.",
     replications: 10,
     durationSeconds: 1200,
     dtSeconds: 0.1,
     seedBase: 3000,
     config: {
+      eastWestGreen: 30,
+      yellow: 3,
+      allRed: 2,
+      northSouthGreen: 30,
+      arrivalRatePerHour: {
+        west: 300,
+        east: 300,
+        north: 300,
+        south: 300,
+      },
+      pedestrianTotalRatePerHour: 100,
+      desiredSpeedMps: 30 * 0.44704,
+      leftTurnRatio: 0.05,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.30,
+    },
+  },
+  {
+    id: "S4",
+    title: "Higher Pedestrian Demand",
+    description: "Balanced vehicle demand with a higher crosswalk arrival rate.",
+    replications: 10,
+    durationSeconds: 1200,
+    dtSeconds: 0.1,
+    seedBase: 4000,
+    config: {
+      eastWestGreen: 30,
+      yellow: 3,
+      allRed: 2,
+      northSouthGreen: 30,
+      arrivalRatePerHour: {
+        west: 300,
+        east: 300,
+        north: 300,
+        south: 300,
+      },
+      pedestrianTotalRatePerHour: 500,
+      desiredSpeedMps: 30 * 0.44704,
+      leftTurnRatio: 0.05,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.05,
+    },
+  },
+  {
+    id: "S5",
+    title: "Heavier East-West Demand With Base Timing",
+    description: "Directional demand imbalance is introduced while keeping the baseline timing plan.",
+    replications: 10,
+    durationSeconds: 1200,
+    dtSeconds: 0.1,
+    seedBase: 5000,
+    config: {
+      eastWestGreen: 30,
+      yellow: 3,
+      allRed: 2,
+      northSouthGreen: 30,
+      arrivalRatePerHour: {
+        west: 600,
+        east: 600,
+        north: 300,
+        south: 300,
+      },
+      pedestrianTotalRatePerHour: 100,
+      desiredSpeedMps: 30 * 0.44704,
+      leftTurnRatio: 0.05,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.05,
+    },
+  },
+  {
+    id: "S6",
+    title: "Heavier East-West Demand With Retiming",
+    description: "The east-west-heavy demand case is retimed by reallocating green time toward the dominant phase.",
+    replications: 10,
+    durationSeconds: 1200,
+    dtSeconds: 0.1,
+    seedBase: 6000,
+    config: {
       eastWestGreen: 40,
-      yellow: 5,
+      yellow: 3,
+      allRed: 2,
       northSouthGreen: 20,
       arrivalRatePerHour: {
-        west: 750,
-        east: 750,
-        north: 350,
-        south: 350,
+        west: 600,
+        east: 600,
+        north: 300,
+        south: 300,
       },
+      pedestrianTotalRatePerHour: 100,
       desiredSpeedMps: 30 * 0.44704,
-      leftTurnRatio: 0.15,
-      largeVehicleRatio: 0.10,
+      leftTurnRatio: 0.05,
+      rightTurnRatio: 0.05,
+      largeVehicleRatio: 0.05,
     },
   },
 ];
@@ -1168,8 +1682,8 @@ const summary = {
   generatedAt: new Date().toISOString(),
   assumptions: {
     laneConfiguration: "One inbound lane per approach at a four-leg signalized intersection.",
-    control: "Two-phase signal control with user-adjustable green and yellow intervals.",
-    behavior: "Stochastic arrivals, mixed turning movements, large-vehicle share, and permissive left-turn yielding.",
+    control: "Two-phase signal control with user-adjustable green, yellow, and all-red intervals.",
+    behavior: "Stochastic arrivals, mixed turning movements, pedestrian crossings, large-vehicle share, and permissive left-turn yielding.",
     resultsNote: "Scenario results are illustrative outputs from the teaching simulator rather than calibrated field estimates.",
   },
   scenarios: scenarios.map(summarizeScenario),
