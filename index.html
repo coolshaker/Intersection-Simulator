@@ -19,9 +19,6 @@
           Explore signal timing, stochastic arrivals, queue formation, and delay at a
           signalized intersection with one lane on each approach.
         </p>
-        <p class="hero-copy">
-          <a href="https://www.transinformatics.com/" target="_blank" rel="noopener noreferrer">Transportation Informatics Lab</a>
-        </p>
       </div>
       <div class="hero-badge">
         <span id="sim-status">Paused</span>
@@ -89,31 +86,25 @@
             <span>Large Vehicle Ratio (%)</span>
             <input id="large-vehicle-ratio" type="number" min="0" max="100" step="1" value="5">
           </label>
-          <label class="field">
-            <span>Simulation Speed</span>
-            <input id="sim-speed" type="range" min="0.5" max="10" step="0.5" value="1">
-            <output id="sim-speed-label">1.0x</output>
-          </label>
-        </div>
-
-        <div class="button-row">
-          <button id="start-button" class="primary">Start</button>
-          <button id="pause-button">Pause</button>
-          <button id="reset-button">Reset</button>
         </div>
       </section>
 
       <section class="panel visualization-panel">
         <div class="panel-heading">
           <h2>Intersection View</h2>
-          <p>Each approach uses a single lane. East-west and north-south traffic alternate in a simple two-phase signal cycle.</p>
         </div>
         <canvas id="sim-canvas" width="1000" height="840" aria-label="Intersection simulation display" title="Click to start or pause the simulation"></canvas>
-        <div class="legend">
-          <span><i class="dot green"></i> Active Signal</span>
-          <span><i class="dot yellow"></i> Yellow</span>
-          <span><i class="dot red"></i> Stopped Phase</span>
-          <span><i class="swatch"></i> Vehicles</span>
+        <div class="sim-toolbar">
+          <label class="field sim-speed-field">
+            <span>Simulation Speed</span>
+            <input id="sim-speed" type="range" min="0.5" max="10" step="0.5" value="1">
+            <output id="sim-speed-label">1.0x</output>
+          </label>
+          <div class="button-row sim-button-row">
+            <button id="start-button" class="primary">Start</button>
+            <button id="pause-button">Pause</button>
+            <button id="reset-button">Reset</button>
+          </div>
         </div>
       </section>
 
@@ -153,10 +144,10 @@
 
     <footer class="footer">
       <p>
-        Author: Dr. Kun Xie<br>
-        Transportation Informatics Lab<br>
-        Old Dominion University<br>
-        <a href="mailto:kxie@odu.edu">kxie@odu.edu</a>
+        <a href="mailto:kxie@odu.edu">Dr. Kun Xie</a><br>
+        <a href="https://www.transinformatics.com/">Transportation Informatics Lab</a><br>
+        <a href="https://www.odu.edu/">Old Dominion University</a><br>
+
       </p>
     </footer>
   </div>

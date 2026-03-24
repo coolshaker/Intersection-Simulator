@@ -119,6 +119,7 @@ h1 {
 .controls-panel {
   grid-row: span 2;
   padding: 16px;
+  min-height: 590px;
 }
 
 .controls-panel .panel-heading {
@@ -146,7 +147,7 @@ h1 {
 }
 
 .stats-panel {
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .panel {
@@ -245,44 +246,29 @@ button.primary {
   cursor: pointer;
 }
 
-.legend {
+.sim-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 14px;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.legend span {
-  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 14px 18px;
+  margin-top: 16px;
 }
 
-.dot,
-.swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+.sim-speed-field {
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+.sim-speed-field output {
   display: inline-block;
+  margin-top: 4px;
 }
 
-.dot.green {
-  background: #22c55e;
-}
-
-.dot.yellow {
-  background: #fbbf24;
-}
-
-.dot.red {
-  background: #ef4444;
-}
-
-.swatch {
-  border-radius: 4px;
-  background: #255f85;
+.sim-button-row {
+  margin: 0;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .stats-grid {
@@ -347,6 +333,18 @@ button.primary {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sim-toolbar {
+    align-items: stretch;
+  }
+
+  .sim-speed-field {
+    max-width: none;
+  }
+
+  .sim-button-row {
+    justify-content: flex-start;
   }
 }
 
