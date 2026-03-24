@@ -49,13 +49,13 @@ const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
 const sharedLaneConflictThresholdPx = 12;
 const crosswalkHalfSpanPx = 60;
-const crosswalkWidthPx = 28;
+const crosswalkWidthPx = 36;
 const crosswalkInnerSetbackPx = 19;
 const crosswalkOffsetPx = crosswalkInnerSetbackPx + crosswalkWidthPx / 2;
-const stopLineGapFromCrosswalkPx = 7;
+const stopLineGapFromCrosswalkPx = 12;
 const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
 const stopLineThicknessPx = 6;
-const stopLineLengthPx = 44;
+const stopLineLengthPx = 52;
 const centerlineEndClearancePx = stopLineThicknessPx / 2 + 18;
 const centerlineSetbackPx = roadHalfWidth + stopLineOffsetPx + centerlineEndClearancePx;
 const crosswalkStripeThicknessPx = 8;
@@ -1665,24 +1665,24 @@ function drawRoads() {
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.fillRect(
     approaches.west.stopCoord - stopLineThicknessPx / 2,
-    roadCenterY + 2,
+    approaches.west.laneCenter - stopLineLengthPx / 2,
     stopLineThicknessPx,
     stopLineLengthPx
   );
   ctx.fillRect(
     approaches.east.stopCoord - stopLineThicknessPx / 2,
-    roadCenterY - 2 - stopLineLengthPx,
+    approaches.east.laneCenter - stopLineLengthPx / 2,
     stopLineThicknessPx,
     stopLineLengthPx
   );
   ctx.fillRect(
-    roadCenterX - 2 - stopLineLengthPx,
+    approaches.north.laneCenter - stopLineLengthPx / 2,
     approaches.north.stopCoord - stopLineThicknessPx / 2,
     stopLineLengthPx,
     stopLineThicknessPx
   );
   ctx.fillRect(
-    roadCenterX + 2,
+    approaches.south.laneCenter - stopLineLengthPx / 2,
     approaches.south.stopCoord - stopLineThicknessPx / 2,
     stopLineLengthPx,
     stopLineThicknessPx

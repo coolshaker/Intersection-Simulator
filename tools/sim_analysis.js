@@ -17,10 +17,10 @@ const queueCreepSpeedMps = 2.2;
 const queueFollowerGapPx = minVehicleGapPx + 10;
 const leftTurnYieldBufferPx = 18;
 const sharedLaneConflictThresholdPx = 12;
-const crosswalkWidthPx = 28;
+const crosswalkWidthPx = 36;
 const crosswalkInnerSetbackPx = 19;
 const crosswalkOffsetPx = crosswalkInnerSetbackPx + crosswalkWidthPx / 2;
-const stopLineGapFromCrosswalkPx = 7;
+const stopLineGapFromCrosswalkPx = 12;
 const stopLineOffsetPx = crosswalkOffsetPx + crosswalkWidthPx / 2 + stopLineGapFromCrosswalkPx;
 const defaultMovementRatios = {
   left: 0.23,
